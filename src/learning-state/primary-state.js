@@ -35,12 +35,16 @@ const TABLE = Object.freeze({
   [`${POSITIVE}|${NEGATIVE}`]: NOT_LEARNED, // PD-5F-21
   [`${NOT_FORMED}|${POSITIVE}`]: STABLE,    // PD-5F-13
 
-  // Derived from LOCKs (no cell-specific record)
-  [`${NEGATIVE}|${POSITIVE}`]: UNSTABLE,    // PD-5F-12 (positive Retention establishes formation) + PD-5F-11
-  [`${NOT_FORMED}|${NOT_FORMED}`]: NOT_LEARNED, // PD-5F-11: formation not established
-  [`${NEGATIVE}|${NOT_FORMED}`]: NOT_LEARNED,   // PD-5F-5 + PD-5F-11: negative Recall alone is insufficient
+  // Derived from LOCKs: positive Retention affirmatively establishes formation
+  // (PD-5F-12), and PD-5F-11 maps established formation + negative Recall to unstable.
+  [`${NEGATIVE}|${POSITIVE}`]: UNSTABLE,    // PD-5F-12 + PD-5F-11
 
-  // Undecided: no LOCK covers these cells
+  // Undecided: no LOCK covers these cells. PD-5F-22 forbids inferring
+  // "formation not established" from the absence of a confirmed channel, so
+  // PD-5F-11's not_learned row cannot be applied to them. Negative Retention
+  // has no formation bridge (PD-5F-21 §4).
+  [`${NOT_FORMED}|${NOT_FORMED}`]: UNDECIDED,
+  [`${NEGATIVE}|${NOT_FORMED}`]: UNDECIDED,
   [`${NOT_FORMED}|${NEGATIVE}`]: UNDECIDED,
   [`${NEGATIVE}|${NEGATIVE}`]: UNDECIDED,
 });
