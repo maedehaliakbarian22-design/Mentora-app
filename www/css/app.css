@@ -1,0 +1,203 @@
+/* Bundled Persian font. Loaded only from the app itself; no internet fonts. */
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/Vazirmatn-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("../fonts/Vazirmatn-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Mentora demo prototype styles. RTL, mobile-first, no external resources. */
+
+:root {
+  --bg: #f6f7fa;
+  --surface: #ffffff;
+  --text: #1b2230;
+  --muted: #55607a;
+  --line: #d9dee9;
+  --primary: #1b6e5a;
+  --primary-text: #ffffff;
+  --ok-bg: #e4f3e8;
+  --ok-text: #1d6b33;
+  --bad-bg: #fbe9e7;
+  --bad-text: #a3271d;
+  --badge-bg: #fff4d6;
+  --badge-text: #6b4a00;
+  --focus: #2456c8;
+  --radius: 14px;
+  font-family: Vazirmatn, Tahoma, "Segoe UI", "Noto Sans Arabic", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.9;
+  -webkit-text-size-adjust: 100%;
+}
+
+body { min-height: 100vh; }
+
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px 16px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+h1, h2 {
+  margin: 0;
+  line-height: 1.6;
+  outline: none;
+}
+h1 { font-size: 1.45rem; }
+h2 { font-size: 1.15rem; }
+
+p { margin: 0; }
+
+.top { display: flex; flex-direction: column; gap: 8px; }
+.kicker { color: var(--muted); font-size: 0.9rem; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lesson-body p + p { margin-top: 10px; }
+
+.meta { color: var(--muted); font-size: 0.95rem; }
+
+.note { color: var(--muted); font-size: 0.9rem; }
+
+.badge {
+  display: inline-block;
+  align-self: flex-start;
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.banner {
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 0.95rem;
+}
+
+button {
+  font: inherit;
+  min-height: 48px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+.link:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+  font-weight: 600;
+}
+
+.secondary { background: transparent; }
+
+.link {
+  width: auto;
+  min-height: 44px;
+  border: none;
+  background: none;
+  color: var(--primary);
+  padding: 8px 4px;
+  font-size: 0.95rem;
+}
+
+.crumbs { display: flex; }
+
+.progress {
+  height: 8px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.2s ease;
+}
+
+.prompt { font-size: 1.25rem; }
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choice {
+  text-align: right;
+  font-size: 1.05rem;
+  padding: 12px 16px;
+}
+.choice[aria-checked="true"] { border-width: 2px; }
+.choice.is-correct { background: var(--ok-bg); border-color: var(--ok-text); color: var(--ok-text); }
+.choice.is-wrong { background: var(--bad-bg); border-color: var(--bad-text); color: var(--bad-text); }
+.choice:disabled { opacity: 1; }
+.choice.is-correct:disabled,
+.choice.is-wrong:disabled { cursor: default; }
+
+.feedback {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 600;
+}
+.feedback.ok { background: var(--ok-bg); color: var(--ok-text); }
+.feedback.bad { background: var(--bad-bg); color: var(--bad-text); }
+
+.score { text-align: center; align-items: center; }
+.big { font-size: 2rem; font-weight: 700; }
+
+.loading { text-align: center; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .progress span { transition: none; }
+}

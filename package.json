@@ -1,8 +1,14 @@
 {
-  "name": "mentora-app",
-  "version": "1.0.0",
+  "name": "mentora-demo-prototype",
+  "version": "0.1.0",
   "private": true,
-  "scripts": {},
+  "type": "module",
+  "description": "Local browser prototype for the Mentora demo vertical slice. Demo content only.",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "e2e": "python3 e2e/test_journey.py",
+    "cap:sync": "cap sync android"
+  },
   "dependencies": {
     "@capacitor/core": "^6.0.0",
     "@capacitor/cli": "^6.0.0",

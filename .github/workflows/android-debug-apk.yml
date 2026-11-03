@@ -1,0 +1,81 @@
+name: Android debug APK (demo)
+
+# Runs on a dedicated demo branch only, never on main.
+# Trigger: a push to mobile-apk-demo, or a manual "Run workflow" click.
+on:
+  push:
+    branches: [mobile-apk-demo]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Unit tests (gate)
+        run: |
+          npm install
+          npm test
+
+      - name: Report Vazirmatn font status
+        run: |
+          if [ -f www/fonts/Vazirmatn-Regular.woff2 ] && [ -f www/fonts/Vazirmatn-Bold.woff2 ]; then
+            echo "FONT_STATUS=bundled" >> "$GITHUB_ENV"
+            echo "::notice::Vazirmatn font files are bundled."
+          else
+            echo "FONT_STATUS=missing" >> "$GITHUB_ENV"
+            echo "::warning::Vazirmatn font files are missing; the app will use a system font."
+          fi
+
+      - name: Create Capacitor Android project
+        run: npx cap add android
+
+      - name: Sync web assets
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Verify APK exists and package ID
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          test -f "$APK"
+          ls -l "$APK"
+          python3 - "$APK" <<'PY'
+          import sys, zipfile
+          z = zipfile.ZipFile(sys.argv[1])
+          names = z.namelist()
+          assert 'AndroidManifest.xml' in names and 'classes.dex' in names, names
+          manifest = z.read('AndroidManifest.xml')
+          # Binary XML stores strings as UTF-16LE; check the expected application ID.
+          assert 'com.mentora.app'.encode('utf-16-le') in manifest, 'package id not found'
+          print('APK verified: package com.mentora.app, classes.dex present')
+          PY
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mentora-debug-apk-demo-${{ github.sha }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
