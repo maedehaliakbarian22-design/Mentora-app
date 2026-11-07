@@ -1,25 +1,23 @@
-// Mentora demo prototype: UI controller.
-// All educational content is demo content (see data/demo-content.js).
-// No Learning State is computed or shown.
+// Mentora app shell. Wires the pure navigation, progress and render modules to
+// the DOM. Learning State is never computed, stored or shown here.
 
-import { CONTENT, DEMO_LABEL } from './data/demo-content.js';
-import { validateContent } from './domain/content-validate.js';
+import { CATALOG, indexCatalog } from './content/catalog.js';
+import { validateCatalog } from './content/validate.js';
+import {
+  createProgressStore, recordAnswer, clearSection, setSelection, sectionAnswers,
+} from './progress/progress-store.js';
+import { createNavigator, ROUTES } from './core/navigation.js';
+import { registerBackButton } from './core/platform.js';
 import { evaluateAnswer, computeResult } from './domain/evaluate.js';
-import { createStore } from './data/attempt-store.js';
+import * as view from './ui/render.js';
 
-const PERSIAN_DIGITS = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+const appEl = document.getElementById('app');
+const errors = validateCatalog(CATALOG);
 
-export function toFa(value) {
-  return String(value).replace(/[0-9]/g, (d) => PERSIAN_DIGITS[Number(d)]);
-}
-
-function esc(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+if (errors.length > 0) {
+  appEl.innerHTML = view.renderCatalogError(errors);
+} else {
+  boot();
 }
 
 function memoryStorage() {
@@ -41,22 +39,13 @@ function pickStorage() {
   }
 }
 
-const appEl = document.getElementById('app');
-const invalid = validateContent(CONTENT);
-
-if (invalid.length > 0) {
-  appEl.innerHTML = `<section class="card"><h1 id="title" tabindex="-1">محتوای نمونه نامعتبر است</h1>
-    <ul>${invalid.map((e) => `<li>${esc(e)}</li>`).join('')}</ul></section>`;
-} else {
-  start();
-}
-
-function start() {
+function boot() {
+  const index = indexCatalog(CATALOG);
   const { storage, usingMemory } = pickStorage();
-  const store = createStore(storage, CONTENT);
+  const store = createProgressStore(storage, index);
   const loaded = store.load();
 
-  let state = loaded.state;
+  let progress = loaded.progress;
   let pendingNotices = [];
   if (usingMemory) {
     pendingNotices.push('ذخیرهٔ دائمی در این مرورگر فعال نیست؛ پیشرفت پس از بستن برنامه حفظ نمی‌شود.');
@@ -64,183 +53,201 @@ function start() {
     pendingNotices.push('ذخیرهٔ پیشرفت در این مرورگر ممکن نیست.');
   }
   if (loaded.recovered) {
-    pendingNotices.push('داده‌های ذخیره‌شدهٔ قبلی نامعتبر بود و بازنشانی شد.');
+    pendingNotices.push('داده‌های ذخیره‌شدهٔ قبلی نامعتبر بود و بخشی از آن بازنشانی شد.');
   }
   let persistFailed = false;
-  // Replace corrupt data with the clean default once, so the notice is not repeated.
-  if (loaded.recovered && loaded.storageOk) {
-    persistFailed = !store.save(state);
-  }
+  if (loaded.recovered && loaded.storageOk) persistFailed = !store.save(progress);
 
-  const chapter = CONTENT.chapter;
-  const lesson = () => CONTENT.lessons.find((l) => l.id === state.lessonId);
-  const lessonQuestions = () => CONTENT.questions.filter((q) => q.lessonId === state.lessonId);
-  const answeredCount = () => lessonQuestions().filter((q) => state.answers[q.id]).length;
+  const nav = createNavigator({ name: ROUTES.DASHBOARD });
+  if (!progress.selection) nav.reset({ name: ROUTES.SELECTION });
 
   function commit(next) {
-    state = next;
-    persistFailed = !store.save(state);
+    progress = next;
+    persistFailed = !store.save(progress);
     render();
   }
 
-  function firstUnansweredIndex() {
-    const idx = lessonQuestions().findIndex((q) => !state.answers[q.id]);
-    return idx === -1 ? 0 : idx;
+  function goBack() {
+    const moved = nav.back();
+    if (moved) render();
+    return moved;
+  }
+
+  // ----- derived view models -------------------------------------------------
+
+  function sectionProgress(section) {
+    const answers = sectionAnswers(progress, section.id);
+    return {
+      answered: section.questions.filter((q) => answers[q.id] !== undefined).length,
+      total: section.questions.length,
+      hasDemo: section.questions.some((q) => q.status === 'demo'),
+    };
+  }
+
+  function selectionLabel() {
+    const sel = progress.selection;
+    if (!sel) return '';
+    const grade = CATALOG.grades.find((g) => g.id === sel.gradeId);
+    const field = grade && grade.fields.find((f) => f.id === sel.fieldId);
+    return [grade && grade.label, field && field.label].filter(Boolean).join(' · ');
+  }
+
+  function dashboardVm() {
+    const sel = progress.selection;
+    const subjects = [...index.subjects.values()]
+      .filter((s) => sel && s.gradeId === sel.gradeId && s.fieldId === sel.fieldId)
+      .map((s) => ({
+        id: s.id,
+        label: s.label,
+        chapters: s.chapters.map((cid) => {
+          const c = index.chapters.get(cid);
+          const sums = c.sections.map((sec) => sectionProgress(index.sections.get(sec.id)));
+          return {
+            id: c.id,
+            title: c.title,
+            answered: sums.reduce((n, x) => n + x.answered, 0),
+            total: sums.reduce((n, x) => n + x.total, 0),
+            hasDemo: sums.some((x) => x.hasDemo),
+          };
+        }),
+      }));
+    return { selectionLabel: selectionLabel(), subjects };
+  }
+
+  function screenFor(route) {
+    switch (route.name) {
+      case ROUTES.SELECTION:
+        return view.renderSelection({
+          grades: CATALOG.grades,
+          gradeId: route.gradeId || (progress.selection && progress.selection.gradeId) || CATALOG.grades[0].id,
+          selection: progress.selection,
+          canGoBack: nav.canGoBack(),
+        });
+      case ROUTES.DASHBOARD:
+        if (!progress.selection) return screenFor({ name: ROUTES.SELECTION });
+        return view.renderDashboard(dashboardVm());
+      case ROUTES.SUBJECT: {
+        const subject = index.subjects.get(route.subjectId);
+        if (!subject) return screenFor({ name: ROUTES.DASHBOARD });
+        const chapters = subject.chapters.map((cid) => index.chapters.get(cid));
+        return view.renderSubject({ subject: { id: subject.id, label: subject.label }, chapters });
+      }
+      case ROUTES.CHAPTER: {
+        const chapter = index.chapters.get(route.chapterId);
+        if (!chapter) return screenFor({ name: ROUTES.DASHBOARD });
+        const sections = chapter.sections.map((s) => {
+          const sec = index.sections.get(s.id);
+          return { id: sec.id, title: sec.title, placeholder: sec.placeholder, ...sectionProgress(sec) };
+        });
+        return view.renderChapter({ chapter, sections });
+      }
+      case ROUTES.SECTION: {
+        const section = index.sections.get(route.sectionId);
+        if (!section) return screenFor({ name: ROUTES.DASHBOARD });
+        return view.renderSection({ section, ...sectionProgress(section) });
+      }
+      case ROUTES.PRACTICE: {
+        const section = index.sections.get(route.sectionId);
+        const question = section && section.questions[route.index];
+        if (!question) return screenFor({ name: ROUTES.SECTION, sectionId: route.sectionId });
+        const selected = sectionAnswers(progress, section.id)[question.id];
+        const answer = selected === undefined
+          ? null
+          : { selectedIndex: selected, correct: evaluateAnswer(question, selected).correct };
+        return view.renderPractice({
+          section,
+          question,
+          index: route.index,
+          total: section.questions.length,
+          answer,
+          isLast: route.index === section.questions.length - 1,
+        });
+      }
+      case ROUTES.RESULT: {
+        const section = index.sections.get(route.sectionId);
+        const answers = sectionAnswers(progress, section.id);
+        const asEntries = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { selectedIndex: v }]));
+        const result = computeResult(section.questions, asEntries);
+        return view.renderResult({ section, result, hasDemo: section.questions.some((q) => q.status === 'demo') });
+      }
+      default:
+        return screenFor({ name: ROUTES.DASHBOARD });
+    }
   }
 
   function banners() {
     const items = [];
     if (persistFailed) items.push('ذخیرهٔ پیشرفت در این لحظه انجام نشد.');
-    for (const n of pendingNotices) items.push(n);
+    items.push(...pendingNotices);
     pendingNotices = [];
-    if (items.length === 0) return '';
-    return `<div class="banner" role="status">${items.map((t) => `<p>${esc(t)}</p>`).join('')}</div>`;
-  }
-
-  function demoBadge() {
-    return `<span class="badge">${esc(DEMO_LABEL)}</span>`;
-  }
-
-  function chapterView() {
-    const total = lessonQuestions().length;
-    const done = answeredCount();
-    return `
-      <header class="top">
-        <p class="kicker">پایه دهم · شیمی</p>
-        <h1 id="title" tabindex="-1">${esc(chapter.title)}</h1>
-        ${demoBadge()}
-      </header>
-      <section class="card">
-        <h2>${esc(lesson().title)}</h2>
-        <p class="meta">${esc(toFa(done))} از ${esc(toFa(total))} پاسخ ثبت‌شده</p>
-        <button type="button" class="primary" data-action="start-lesson">شروع درس</button>
-      </section>
-      <p class="note">این صفحه نمونه‌ای از جریان برنامه است و محتوای تأییدشدهٔ کتاب نیست.</p>`;
-  }
-
-  function lessonView() {
-    const total = lessonQuestions().length;
-    const done = answeredCount();
-    const body = lesson().body.map((p) => `<p>${esc(toFa(p))}</p>`).join('');
-    return `
-      <nav class="crumbs"><button type="button" class="link" data-action="back-chapter">فصل</button></nav>
-      <header class="top">
-        <h1 id="title" tabindex="-1">${esc(lesson().title)}</h1>
-        ${demoBadge()}
-      </header>
-      <article class="card lesson-body">${body}</article>
-      <p class="meta">${esc(toFa(done))} از ${esc(toFa(total))} تمرین پاسخ داده شده</p>
-      <button type="button" class="primary" data-action="start-practice">شروع تمرین</button>
-      ${done > 0 ? '<button type="button" class="secondary" data-action="restart-lesson">تمرین دوباره از ابتدا</button>' : ''}`;
-  }
-
-  function questionView() {
-    const questions = lessonQuestions();
-    const total = questions.length;
-    const q = questions[state.questionIndex];
-    const entry = state.answers[q.id];
-    const answered = Boolean(entry);
-    const progress = Math.round((state.questionIndex / total) * 100);
-
-    const choices = q.options
-      .map((opt, i) => {
-        const selected = answered && entry.selectedIndex === i;
-        const cls = ['choice'];
-        if (answered && i === q.correctIndex) cls.push('is-correct');
-        if (selected && !entry.correct) cls.push('is-wrong');
-        return `<button type="button" role="radio" aria-checked="${selected}" class="${cls.join(' ')}"
-          data-action="choose" data-index="${i}" ${answered ? 'disabled' : ''}>${esc(toFa(opt))}</button>`;
-      })
-      .join('');
-
-    let feedback = '';
-    if (answered) {
-      feedback = entry.correct
-        ? '<p class="feedback ok">درست است.</p>'
-        : `<p class="feedback bad">نادرست است. پاسخ درست: ${esc(toFa(q.options[q.correctIndex]))}</p>`;
-    }
-    const isLast = state.questionIndex === total - 1;
-
-    return `
-      <nav class="crumbs"><button type="button" class="link" data-action="back-lesson">بازگشت به درس</button></nav>
-      <div class="progress" aria-hidden="true"><span style="width:${progress}%"></span></div>
-      <p class="meta">سؤال ${esc(toFa(state.questionIndex + 1))} از ${esc(toFa(total))} ${demoBadge()}</p>
-      <h1 id="title" tabindex="-1" class="prompt">${esc(toFa(q.prompt))}</h1>
-      <div class="choices" role="radiogroup" aria-label="گزینه‌ها">${choices}</div>
-      <div role="status" aria-live="polite">${feedback}</div>
-      <button type="button" class="primary" data-action="next" ${answered ? '' : 'disabled'}>
-        ${isLast ? 'مشاهدهٔ نتیجه' : 'سؤال بعدی'}
-      </button>`;
-  }
-
-  function resultView() {
-    const result = computeResult(lessonQuestions(), state.answers);
-    const message = result.correct === result.total
-      ? 'همهٔ پاسخ‌ها درست بود.'
-      : 'پاسخ‌های نادرست را دوباره مرور کنید.';
-    return `
-      <header class="top">
-        <h1 id="title" tabindex="-1">نتیجهٔ تمرین نمونه</h1>
-        ${demoBadge()}
-      </header>
-      <section class="card score">
-        <p class="big">${esc(toFa(result.correct))} از ${esc(toFa(result.total))}</p>
-        <p class="meta">${esc(toFa(result.percent))}٪ درست</p>
-        <p>${esc(message)}</p>
-      </section>
-      <button type="button" class="primary" data-action="back-chapter">بازگشت به فصل</button>
-      <button type="button" class="secondary" data-action="restart-lesson">تمرین دوباره از ابتدا</button>`;
+    return view.renderBanners(items);
   }
 
   function render() {
-    let view;
-    if (state.phase === 'chapter') view = chapterView();
-    else if (state.phase === 'lesson') view = lessonView();
-    else if (state.phase === 'question') view = questionView();
-    else view = resultView();
-    appEl.innerHTML = banners() + view;
+    appEl.innerHTML = banners() + screenFor(nav.current());
     const title = appEl.querySelector('#title');
     if (title) title.focus({ preventScroll: true });
   }
 
-  function handle(action, dataset) {
-    const questions = lessonQuestions();
+  // ----- actions ---------------------------------------------------------------
+
+  function handle(action, ds) {
     switch (action) {
-      case 'start-lesson':
-        return commit({ ...state, phase: 'lesson' });
-      case 'back-chapter':
-        return commit({ ...state, phase: 'chapter' });
-      case 'back-lesson':
-        return commit({ ...state, phase: 'lesson' });
+      case 'back':
+        return goBack();
+      case 'pick-grade':
+        nav.replace({ name: ROUTES.SELECTION, gradeId: ds.grade });
+        return render();
+      case 'pick-field':
+        nav.reset({ name: ROUTES.DASHBOARD });
+        return commit(setSelection(progress, { gradeId: ds.grade, fieldId: ds.field }));
+      case 'change-selection':
+        nav.push({ name: ROUTES.SELECTION, gradeId: progress.selection ? progress.selection.gradeId : undefined });
+        return render();
+      case 'open-subject':
+        nav.push({ name: ROUTES.SUBJECT, subjectId: ds.subject });
+        return render();
+      case 'open-chapter':
+        nav.push({ name: ROUTES.CHAPTER, chapterId: ds.chapter });
+        return render();
+      case 'open-section':
+        nav.push({ name: ROUTES.SECTION, sectionId: ds.section });
+        return render();
       case 'start-practice': {
-        if (answeredCount() === questions.length) {
-          return commit({ ...state, phase: 'result' });
-        }
-        return commit({ ...state, phase: 'question', questionIndex: firstUnansweredIndex() });
+        const section = index.sections.get(ds.section);
+        if (!section || section.questions.length === 0) return undefined;
+        const answers = sectionAnswers(progress, section.id);
+        const firstOpen = section.questions.findIndex((q) => answers[q.id] === undefined);
+        if (firstOpen === -1) nav.push({ name: ROUTES.RESULT, sectionId: section.id });
+        else nav.push({ name: ROUTES.PRACTICE, sectionId: section.id, index: firstOpen });
+        return render();
       }
       case 'choose': {
-        const q = questions[state.questionIndex];
-        if (!q || state.answers[q.id]) return undefined;
-        const selectedIndex = Number(dataset.index);
-        const { correct } = evaluateAnswer(q, selectedIndex);
-        return commit({
-          ...state,
-          answers: { ...state.answers, [q.id]: { selectedIndex, correct } },
-        });
+        const route = nav.current();
+        if (route.name !== ROUTES.PRACTICE) return undefined;
+        const section = index.sections.get(route.sectionId);
+        const question = section.questions[route.index];
+        if (!question || sectionAnswers(progress, section.id)[question.id] !== undefined) return undefined;
+        return commit(recordAnswer(progress, question.id, Number(ds.index), index));
       }
       case 'next': {
-        const q = questions[state.questionIndex];
-        if (!q || !state.answers[q.id]) return undefined;
-        if (state.questionIndex < questions.length - 1) {
-          return commit({ ...state, questionIndex: state.questionIndex + 1 });
+        const route = nav.current();
+        if (route.name !== ROUTES.PRACTICE) return undefined;
+        const section = index.sections.get(route.sectionId);
+        const answers = sectionAnswers(progress, section.id);
+        const question = section.questions[route.index];
+        if (!question || answers[question.id] === undefined) return undefined;
+        if (route.index < section.questions.length - 1) {
+          nav.replace({ name: ROUTES.PRACTICE, sectionId: section.id, index: route.index + 1 });
+        } else {
+          nav.replace({ name: ROUTES.RESULT, sectionId: section.id });
         }
-        if (computeResult(questions, state.answers).complete) {
-          return commit({ ...state, phase: 'result' });
-        }
-        return commit({ ...state, questionIndex: firstUnansweredIndex() });
+        return render();
       }
-      case 'restart-lesson':
-        return commit({ ...state, phase: 'lesson', questionIndex: 0, answers: {} });
+      case 'restart-section':
+        commit(clearSection(progress, ds.section));
+        nav.back();
+        return render();
       default:
         return undefined;
     }
@@ -251,6 +258,9 @@ function start() {
     if (!el || el.disabled) return;
     handle(el.dataset.action, el.dataset);
   });
+
+  // Android hardware back: pop the in-app stack; at the root the app exits.
+  registerBackButton(() => goBack(), window);
 
   render();
 }
