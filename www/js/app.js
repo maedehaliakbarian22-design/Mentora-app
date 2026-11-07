@@ -9,6 +9,10 @@ import {
 import { createNavigator, ROUTES } from './core/navigation.js';
 import { registerBackButton } from './core/platform.js';
 import { evaluateAnswer, computeResult } from './domain/evaluate.js';
+import {
+  newPracticeUi, selectOption, checkAnswer, autoAdvancePlan,
+  requestAdvance, cancelAutoAdvance,
+} from './domain/practice-flow.js';
 import * as view from './ui/render.js';
 
 const appEl = document.getElementById('app');
@@ -61,6 +65,12 @@ function boot() {
   const nav = createNavigator({ name: ROUTES.DASHBOARD });
   if (!progress.selection) nav.reset({ name: ROUTES.SELECTION });
 
+  // Practice-only UI state. Held in memory and never persisted, so a pending
+  // selection is lost on restart by design.
+  let practiceUi = null;
+  let autoAdvanceTimer = null;
+  let autoAdvanceKey = null;
+
   function commit(next) {
     progress = next;
     persistFailed = !store.save(progress);
@@ -68,9 +78,78 @@ function boot() {
   }
 
   function goBack() {
+    clearAutoAdvance();
     const moved = nav.back();
     if (moved) render();
     return moved;
+  }
+
+  // ----- practice state helpers ------------------------------------------------
+
+  function practiceKey(route) {
+    return `${route.sectionId}:${route.index}`;
+  }
+
+  function uiFor(route) {
+    const key = practiceKey(route);
+    if (!practiceUi || practiceUi.key !== key) practiceUi = newPracticeUi(key);
+    return practiceUi;
+  }
+
+  function isAnsweredNow(route) {
+    const section = index.sections.get(route.sectionId);
+    const question = section && section.questions[route.index];
+    return Boolean(question) && sectionAnswers(progress, section.id)[question.id] !== undefined;
+  }
+
+  // Cancels a scheduled automatic advance and marks it cancelled, so a late
+  // timer cannot advance the learner.
+  function clearAutoAdvance() {
+    if (autoAdvanceTimer !== null) {
+      clearTimeout(autoAdvanceTimer);
+      autoAdvanceTimer = null;
+    }
+    autoAdvanceKey = null;
+    if (practiceUi) practiceUi = cancelAutoAdvance(practiceUi);
+  }
+
+  function advancePractice() {
+    const route = nav.current();
+    if (route.name !== ROUTES.PRACTICE) return;
+    const section = index.sections.get(route.sectionId);
+    if (route.index < section.questions.length - 1) {
+      nav.replace({ name: ROUTES.PRACTICE, sectionId: section.id, index: route.index + 1 });
+    } else {
+      nav.replace({ name: ROUTES.RESULT, sectionId: section.id });
+    }
+    render();
+  }
+
+  // Shared by Continue and the automatic timer. The flow module guarantees the
+  // advance happens at most once per question.
+  function tryAdvance(source) {
+    const route = nav.current();
+    if (route.name !== ROUTES.PRACTICE) return false;
+    const ui = uiFor(route);
+    const result = requestAdvance(ui, isAnsweredNow(route), source);
+    practiceUi = result.ui;
+    if (!result.advance) return false;
+    clearAutoAdvance();
+    advancePractice();
+    return true;
+  }
+
+  function onAutoAdvanceFired(key) {
+    if (key !== autoAdvanceKey) return;
+    autoAdvanceTimer = null;
+    autoAdvanceKey = null;
+    tryAdvance('timer');
+  }
+
+  // Background cancels the automatic advance. The correct panel stays visible
+  // and waits for Continue when the app returns.
+  function onVisibilityChange() {
+    if (document.visibilityState === 'hidden') clearAutoAdvance();
   }
 
   // ----- derived view models -------------------------------------------------
@@ -154,12 +233,14 @@ function boot() {
         const answer = selected === undefined
           ? null
           : { selectedIndex: selected, correct: evaluateAnswer(question, selected).correct };
+        const ui = uiFor(route);
         return view.renderPractice({
           section,
           question,
           index: route.index,
           total: section.questions.length,
           answer,
+          pending: answer ? null : ui.pending,
           isLast: route.index === section.questions.length - 1,
         });
       }
@@ -222,29 +303,40 @@ function boot() {
         else nav.push({ name: ROUTES.PRACTICE, sectionId: section.id, index: firstOpen });
         return render();
       }
-      case 'choose': {
+      case 'select': {
+        // Changes the pending choice only. Never evaluates or saves.
         const route = nav.current();
         if (route.name !== ROUTES.PRACTICE) return undefined;
         const section = index.sections.get(route.sectionId);
         const question = section.questions[route.index];
-        if (!question || sectionAnswers(progress, section.id)[question.id] !== undefined) return undefined;
-        return commit(recordAnswer(progress, question.id, Number(ds.index), index));
-      }
-      case 'next': {
-        const route = nav.current();
-        if (route.name !== ROUTES.PRACTICE) return undefined;
-        const section = index.sections.get(route.sectionId);
-        const answers = sectionAnswers(progress, section.id);
-        const question = section.questions[route.index];
-        if (!question || answers[question.id] === undefined) return undefined;
-        if (route.index < section.questions.length - 1) {
-          nav.replace({ name: ROUTES.PRACTICE, sectionId: section.id, index: route.index + 1 });
-        } else {
-          nav.replace({ name: ROUTES.RESULT, sectionId: section.id });
-        }
+        if (!question) return undefined;
+        practiceUi = selectOption(uiFor(route), isAnsweredNow(route), Number(ds.index), question.options.length);
         return render();
       }
+      case 'check': {
+        // The only transition that evaluates and persists. Once per question.
+        const route = nav.current();
+        if (route.name !== ROUTES.PRACTICE) return undefined;
+        const section = index.sections.get(route.sectionId);
+        const question = section.questions[route.index];
+        const ui = uiFor(route);
+        const { ui: nextUi, outcome } = checkAnswer(ui, isAnsweredNow(route), question);
+        practiceUi = nextUi;
+        if (!outcome) return render();
+        commit(recordAnswer(progress, question.id, outcome.selectedIndex, index));
+        const plan = autoAdvancePlan(outcome);
+        if (plan.scheduleMs !== null) {
+          const key = practiceKey(route);
+          autoAdvanceKey = key;
+          autoAdvanceTimer = setTimeout(() => onAutoAdvanceFired(key), plan.scheduleMs);
+        }
+        return undefined;
+      }
+      case 'continue':
+        return tryAdvance('continue');
       case 'restart-section':
+        clearAutoAdvance();
+        practiceUi = null;
         commit(clearSection(progress, ds.section));
         nav.back();
         return render();
@@ -258,6 +350,8 @@ function boot() {
     if (!el || el.disabled) return;
     handle(el.dataset.action, el.dataset);
   });
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
 
   // Android hardware back: pop the in-app stack; at the root the app exits.
   registerBackButton(() => goBack(), window);

@@ -11,6 +11,12 @@
   --mv-canvas: #f3f8f7;
   --mv-ok: #15803d;
   --mv-bad: #b91c1c;
+  /* PROVISIONAL feedback colours (awaiting Kimia's approval, B-02). Each ink
+     passes 4.5:1 against its background (measured 8.30 and 8.20). */
+  --mv-feedback-correct-bg: #dcfce7;
+  --mv-feedback-correct-ink: #14532d;
+  --mv-feedback-incorrect-bg: #fee2e2;
+  --mv-feedback-incorrect-ink: #7f1d1d;
   --mv-radius: 16px;
   --mv-tap: 48px;
   font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
@@ -153,10 +159,24 @@ body {
   cursor: pointer;
 }
 .mv-choice:disabled { cursor: default; }
+.mv-choice:disabled {
+  color: var(--mv-ink);
+  opacity: 1;
+}
+.mv-choice.is-selected { border-color: var(--mv-brand); }
 .mv-choice.is-correct { border-color: var(--mv-ok); background: #ecfdf3; }
 .mv-choice.is-wrong { border-color: var(--mv-bad); background: #fef2f2; }
+.mv-choice.is-correct, .mv-choice.is-wrong { display: flex; align-items: center; gap: 8px; }
+.mv-choice__icon { margin-inline-start: auto; font-size: 1.2rem; font-weight: 700; line-height: 1; }
+.mv-choice__icon.is-ok { color: var(--mv-ok); }
+.mv-choice__icon.is-bad { color: var(--mv-bad); }
 
-.mv-feedback { font-weight: 700; margin: 12px 0; }
+.mv-feedback-panel { border-radius: var(--mv-radius); padding: 12px 16px; margin: 12px 0; }
+.mv-feedback-panel.is-correct { background: var(--mv-feedback-correct-bg); color: var(--mv-feedback-correct-ink); }
+.mv-feedback-panel.is-incorrect { background: var(--mv-feedback-incorrect-bg); color: var(--mv-feedback-incorrect-ink); }
+.mv-feedback-panel .mv-note { color: inherit; margin: 6px 0 0; }
+
+.mv-feedback { font-weight: 700; margin: 0; }
 .mv-feedback.is-ok { color: var(--mv-ok); }
 .mv-feedback.is-bad { color: var(--mv-bad); }
 

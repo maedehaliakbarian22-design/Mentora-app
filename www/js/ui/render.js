@@ -123,34 +123,56 @@ export function renderSection(vm) {
     ${practice}`;
 }
 
-// vm: { section, question, index, total, answer: {selectedIndex, correct}|null, isLast }
-// question.options and correctIndex are used only to show feedback after an answer.
+// The unavailable-explanation notice (INC-04). Shown whenever no verified
+// explanation exists. No explanation text is ever written here.
+const unavailableExplanationNote = () =>
+  '<p class="mv-note">«توضیح تأییدشدهٔ این پرسش هنوز در دسترس نیست.»</p>';
+
+// vm: { section, question, index, total, answer: {selectedIndex, correct}|null,
+//       pending: number|null, isLast }
+// `answer` is the locked, recorded answer. `pending` is the unsubmitted choice
+// and is never stored. Correctness is shown only after the answer is locked.
 export function renderPractice(vm) {
   const progress = Math.round((vm.index / vm.total) * 100);
-  const answered = Boolean(vm.answer);
+  const locked = Boolean(vm.answer);
+  const chosen = locked ? vm.answer.selectedIndex : (vm.pending ?? null);
   const choices = vm.question.options.map((opt, i) => {
-    const selected = answered && vm.answer.selectedIndex === i;
-    const correctChoice = answered && i === vm.question.correctIndex;
+    const selected = chosen !== null && chosen === i;
     const cls = ['mv-choice'];
-    if (correctChoice) cls.push('is-correct');
-    if (selected && !vm.answer.correct) cls.push('is-wrong');
+    if (selected && !locked) cls.push('is-selected');
+    if (locked && i === vm.question.correctIndex) cls.push('is-correct');
+    if (locked && selected && !vm.answer.correct) cls.push('is-wrong');
+    // Icon on the chosen option only, after Check (COR-01, INC-01). Colour and
+    // text are also present, so the icon is not the only indicator (DES-08).
+    let icon = '';
+    if (locked && selected) {
+      icon = vm.answer.correct
+        ? '<span class="mv-choice__icon is-ok" aria-hidden="true">✓</span>'
+        : '<span class="mv-choice__icon is-bad" aria-hidden="true">✗</span>';
+    }
     return `<button type="button" role="radio" aria-checked="${selected}" class="${cls.join(' ')}"
-      data-action="choose" data-index="${i}" ${answered ? 'disabled' : ''}>${esc(toFa(opt))}</button>`;
+      data-action="select" data-index="${i}" ${locked ? 'disabled' : ''}>${esc(toFa(opt))}${icon}</button>`;
   }).join('');
+
   let feedback = '';
-  if (answered) {
+  if (locked) {
     feedback = vm.answer.correct
-      ? '<p class="mv-feedback is-ok">درست است.</p>'
-      : `<p class="mv-feedback is-bad">نادرست است. پاسخ درست: ${esc(toFa(vm.question.options[vm.question.correctIndex]))}</p>`;
+      ? `<div class="mv-feedback-panel is-correct"><p class="mv-feedback">✓ درست است.</p>${unavailableExplanationNote()}</div>`
+      : `<div class="mv-feedback-panel is-incorrect"><p class="mv-feedback">✗ نادرست است. پاسخ درست: ${esc(toFa(vm.question.options[vm.question.correctIndex]))}</p>${unavailableExplanationNote()}</div>`;
   }
+
+  const action = locked
+    ? `<button type="button" class="mv-primary" data-action="continue">
+      ${vm.isLast ? 'مشاهدهٔ نتیجه' : 'سؤال بعدی'}</button>`
+    : `<button type="button" class="mv-primary" data-action="check" ${chosen === null ? 'disabled' : ''}>بررسی پاسخ</button>`;
+
   return `${renderTopBar({ title: vm.section.title, backLabel: 'بازگشت به بخش' })}
     <div class="mv-progress" aria-hidden="true"><span style="width:${progress}%"></span></div>
     <p class="mv-meta">سؤال ${esc(toFa(vm.index + 1))} از ${esc(toFa(vm.total))} ${demoBadge()}</p>
     <h2 class="mv-prompt" id="title" tabindex="-1">${esc(toFa(vm.question.prompt))}</h2>
     <div class="mv-choices" role="radiogroup" aria-label="گزینه‌ها">${choices}</div>
     <div role="status" aria-live="polite">${feedback}</div>
-    <button type="button" class="mv-primary" data-action="next" ${answered ? '' : 'disabled'}>
-      ${vm.isLast ? 'مشاهدهٔ نتیجه' : 'سؤال بعدی'}</button>`;
+    ${action}`;
 }
 
 // vm: { section, result: {correct,total,percent}, hasDemo }
