@@ -4,9 +4,10 @@ name: Android debug APK (demo)
 # Trigger: a push to mobile-apk-demo, or a manual "Run workflow" click.
 on:
   push:
-    branches: [mobile-apk-demo]
+    branches:
+      - mobile-apk-demo
+      - feature/mentora-mvp-foundation
   workflow_dispatch:
-
 permissions:
   contents: read
 
