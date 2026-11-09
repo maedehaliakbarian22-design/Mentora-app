@@ -4,8 +4,9 @@
 import { CATALOG, indexCatalog } from './content/catalog.js';
 import { validateCatalog } from './content/validate.js';
 import {
-  createProgressStore, recordAnswer, clearSection, setSelection, sectionAnswers,
+  createProgressStore, recordAnswer, appendAttempt, clearSection, setSelection, sectionAnswers,
 } from './progress/progress-store.js';
+import { createAttemptRecord, newSessionId } from './attempts/attempt-record.js';
 import { createNavigator, ROUTES } from './core/navigation.js';
 import { registerBackButton } from './core/platform.js';
 import { evaluateAnswer, computeResult } from './domain/evaluate.js';
@@ -14,6 +15,9 @@ import {
   requestAdvance, cancelAutoAdvance,
 } from './domain/practice-flow.js';
 import * as view from './ui/render.js';
+import * as tabViews from './ui/tab-views.js';
+import { TAB_ROOT_ROUTE, isTab, shouldShowTabBar, resolveBack } from './core/tabs.js';
+import { continueTarget, learnerStats, overallProgress } from './domain/learner-summary.js';
 
 const appEl = document.getElementById('app');
 const errors = validateCatalog(CATALOG);
@@ -45,6 +49,9 @@ function pickStorage() {
 
 function boot() {
   const index = indexCatalog(CATALOG);
+  // One session per app launch. Stored on every raw attempt so attempts from
+  // different launches can be told apart.
+  const sessionId = newSessionId();
   const { storage, usingMemory } = pickStorage();
   const store = createProgressStore(storage, index);
   const loaded = store.load();
@@ -62,8 +69,33 @@ function boot() {
   let persistFailed = false;
   if (loaded.recovered && loaded.storageOk) persistFailed = !store.save(progress);
 
-  const nav = createNavigator({ name: ROUTES.DASHBOARD });
-  if (!progress.selection) nav.reset({ name: ROUTES.SELECTION });
+  const tabbarEl = document.getElementById('tabbar');
+  // Each tab keeps its own stack, so switching tabs never resets a screen.
+  const ROOTS = {
+    home: { name: ROUTES.HOME },
+    learn: { name: ROUTES.DASHBOARD },
+    profile: { name: ROUTES.PROFILE },
+  };
+  const navs = {
+    home: createNavigator(ROOTS.home),
+    learn: createNavigator(ROOTS.learn),
+    profile: createNavigator(ROOTS.profile),
+  };
+  let activeTab = 'home';
+  // Routes every nav call to the active tab's stack. Existing call sites are unchanged.
+  const nav = {
+    current: () => navs[activeTab].current(),
+    canGoBack: () => navs[activeTab].canGoBack(),
+    push: (route) => navs[activeTab].push(route),
+    replace: (route) => navs[activeTab].replace(route),
+    back: () => navs[activeTab].back(),
+    reset: (route) => navs[activeTab].reset(route),
+  };
+  let animateTab = false;
+  if (!progress.selection) {
+    activeTab = 'learn';
+    navs.learn.reset({ name: ROUTES.SELECTION });
+  }
 
   // Practice-only UI state. Held in memory and never persisted, so a pending
   // selection is lost on restart by design.
@@ -77,11 +109,40 @@ function boot() {
     render();
   }
 
+  // Android back: pop the active tab's stack; from a non-home tab's root go to
+  // Home; at Home's root return false so the app can close.
   function goBack() {
     clearAutoAdvance();
-    const moved = nav.back();
-    if (moved) render();
-    return moved;
+    const action = resolveBack({
+      activeTab,
+      canPop: nav.canGoBack(),
+      hasSelection: Boolean(progress.selection),
+    });
+    if (action === 'pop') {
+      nav.back();
+      render();
+      return true;
+    }
+    if (action === 'home') {
+      activeTab = 'home';
+      animateTab = true;
+      render();
+      return true;
+    }
+    return false;
+  }
+
+  function switchTab(tab) {
+    if (!isTab(tab)) return undefined;
+    clearAutoAdvance();
+    if (tab === activeTab) {
+      // Tapping the active tab returns it to its root screen.
+      navs[tab].reset(ROOTS[tab]);
+    } else {
+      activeTab = tab;
+    }
+    animateTab = true;
+    return render();
   }
 
   // ----- practice state helpers ------------------------------------------------
@@ -92,7 +153,9 @@ function boot() {
 
   function uiFor(route) {
     const key = practiceKey(route);
-    if (!practiceUi || practiceUi.key !== key) practiceUi = newPracticeUi(key);
+    // shownAt is the moment this question was first displayed. It is the start
+    // of the response time recorded on Check.
+    if (!practiceUi || practiceUi.key !== key) practiceUi = { ...newPracticeUi(key), shownAt: Date.now() };
     return practiceUi;
   }
 
@@ -193,6 +256,18 @@ function boot() {
     return { selectionLabel: selectionLabel(), subjects };
   }
 
+  function homeVm() {
+    return {
+      selectionLabel: selectionLabel(),
+      overall: overallProgress(progress, index),
+      target: continueTarget(progress, index),
+    };
+  }
+
+  function profileVm() {
+    return { selectionLabel: selectionLabel(), stats: learnerStats(progress, index) };
+  }
+
   function screenFor(route) {
     switch (route.name) {
       case ROUTES.SELECTION:
@@ -251,6 +326,12 @@ function boot() {
         const result = computeResult(section.questions, asEntries);
         return view.renderResult({ section, result, hasDemo: section.questions.some((q) => q.status === 'demo') });
       }
+      case ROUTES.HOME:
+        if (!progress.selection) return screenFor({ name: ROUTES.SELECTION });
+        return tabViews.renderHome(homeVm());
+      case ROUTES.PROFILE:
+        if (!progress.selection) return screenFor({ name: ROUTES.SELECTION });
+        return tabViews.renderProfile(profileVm());
       default:
         return screenFor({ name: ROUTES.DASHBOARD });
     }
@@ -265,7 +346,19 @@ function boot() {
   }
 
   function render() {
-    appEl.innerHTML = banners() + screenFor(nav.current());
+    const route = nav.current();
+    // Without a selection the learner is on the first-run screen, which has no bar.
+    const effective = progress.selection ? route.name : ROUTES.SELECTION;
+    const showTabs = shouldShowTabBar(effective);
+    appEl.classList.toggle('has-tabbar', showTabs);
+    if (animateTab) {
+      animateTab = false;
+      appEl.classList.remove('is-entering');
+      void appEl.offsetWidth; // restart the fade-in animation
+      appEl.classList.add('is-entering');
+    }
+    tabbarEl.innerHTML = tabViews.renderBottomNav({ active: activeTab, visible: showTabs });
+    appEl.innerHTML = banners() + screenFor(route);
     const title = appEl.querySelector('#title');
     if (title) title.focus({ preventScroll: true });
   }
@@ -280,8 +373,14 @@ function boot() {
         nav.replace({ name: ROUTES.SELECTION, gradeId: ds.grade });
         return render();
       case 'pick-field':
-        nav.reset({ name: ROUTES.DASHBOARD });
+        // A new selection starts the learner on Home with fresh stacks.
+        navs.learn.reset(ROOTS.learn);
+        navs.home.reset(ROOTS.home);
+        navs.profile.reset(ROOTS.profile);
+        activeTab = 'home';
         return commit(setSelection(progress, { gradeId: ds.grade, fieldId: ds.field }));
+      case 'switch-tab':
+        return switchTab(ds.tab);
       case 'change-selection':
         nav.push({ name: ROUTES.SELECTION, gradeId: progress.selection ? progress.selection.gradeId : undefined });
         return render();
@@ -323,7 +422,19 @@ function boot() {
         const { ui: nextUi, outcome } = checkAnswer(ui, isAnsweredNow(route), question);
         practiceUi = nextUi;
         if (!outcome) return render();
-        commit(recordAnswer(progress, question.id, outcome.selectedIndex, index));
+        // One raw attempt per Check, appended. The latest-answer map is updated
+        // in the same commit, so it can always be rebuilt from attempts.
+        const attemptNumber = progress.attempts.filter((a) => a.itemId === question.id).length + 1;
+        const record = createAttemptRecord({
+          itemId: question.id,
+          attemptNumber,
+          status: 'attempted',
+          sessionId,
+          selectedIndex: outcome.selectedIndex,
+          isCorrect: outcome.correct,
+          elapsedTimeMs: Math.max(0, Math.round(Date.now() - ui.shownAt)),
+        });
+        commit(appendAttempt(recordAnswer(progress, question.id, outcome.selectedIndex, index), record, index));
         const plan = autoAdvancePlan(outcome);
         if (plan.scheduleMs !== null) {
           const key = practiceKey(route);
@@ -345,11 +456,13 @@ function boot() {
     }
   }
 
-  appEl.addEventListener('click', (event) => {
+  function onActionClick(event) {
     const el = event.target.closest('[data-action]');
     if (!el || el.disabled) return;
     handle(el.dataset.action, el.dataset);
-  });
+  }
+  appEl.addEventListener('click', onActionClick);
+  tabbarEl.addEventListener('click', onActionClick);
 
   document.addEventListener('visibilitychange', onVisibilityChange);
 

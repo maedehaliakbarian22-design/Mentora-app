@@ -1,0 +1,69 @@
+// Summary numbers for the Home and Profile tabs. Pure: derived only from raw
+// progress facts and catalog content. Nothing here is Learning State. These are
+// counts and percentages of answers the learner has actually given.
+
+import { sectionAnswers } from '../progress/progress-store.js';
+
+// Chapter/section pairs inside the learner's selected grade and field, in
+// catalog order. Empty when nothing is selected.
+export function scopeSections(index, selection) {
+  if (!selection) return [];
+  const out = [];
+  for (const subject of index.subjects.values()) {
+    if (subject.gradeId !== selection.gradeId || subject.fieldId !== selection.fieldId) continue;
+    for (const chapterId of subject.chapters) {
+      const chapter = index.chapters.get(chapterId);
+      if (!chapter) continue;
+      for (const ref of chapter.sections) {
+        const section = index.sections.get(ref.id);
+        if (section) out.push({ chapter, section });
+      }
+    }
+  }
+  return out;
+}
+
+export function overallProgress(progress, index) {
+  let answered = 0;
+  let total = 0;
+  for (const { section } of scopeSections(index, progress.selection)) {
+    const answers = sectionAnswers(progress, section.id);
+    total += section.questions.length;
+    answered += section.questions.filter((q) => answers[q.id] !== undefined).length;
+  }
+  const percent = total === 0 ? 0 : Math.round((answered * 100) / total);
+  return { answered, total, percent };
+}
+
+// The first section, in catalog order, that still has an unanswered question.
+// Returns null when there is none (no questions, or everything answered).
+export function continueTarget(progress, index) {
+  for (const { chapter, section } of scopeSections(index, progress.selection)) {
+    if (section.questions.length === 0) continue;
+    const answers = sectionAnswers(progress, section.id);
+    if (section.questions.some((q) => answers[q.id] === undefined)) {
+      return {
+        sectionId: section.id,
+        sectionTitle: section.title,
+        chapterTitle: chapter.title,
+        answered: section.questions.filter((q) => answers[q.id] !== undefined).length,
+        total: section.questions.length,
+        hasDemo: section.questions.some((q) => q.status === 'demo'),
+      };
+    }
+  }
+  return null;
+}
+
+// accuracyPercent is null when no attempt has been recorded yet.
+export function learnerStats(progress, index) {
+  const attempted = progress.attempts.filter((a) => a.status === 'attempted');
+  const correct = attempted.filter((a) => a.isCorrect === true).length;
+  return {
+    attempts: progress.attempts.length,
+    correct,
+    accuracyPercent: attempted.length === 0 ? null : Math.round((correct * 100) / attempted.length),
+    sessions: new Set(progress.attempts.map((a) => a.sessionId)).size,
+    ...overallProgress(progress, index),
+  };
+}

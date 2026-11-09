@@ -9,6 +9,8 @@ export const ROUTES = Object.freeze({
   SECTION: 'section',
   PRACTICE: 'practice',
   RESULT: 'result',
+  HOME: 'home',
+  PROFILE: 'profile',
 });
 
 const ROUTE_NAMES = Object.freeze(Object.values(ROUTES));

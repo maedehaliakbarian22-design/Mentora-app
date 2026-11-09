@@ -1,0 +1,120 @@
+/* Bottom navigation (Home / Learn / Profile). RTL, fixed to the bottom, with
+   safe-area support. Colours follow the app's primary green (#1b6e5a). */
+
+:root {
+  --mv-tab-active: #1b6e5a;
+  --mv-tab-idle: #7b8794;
+  --mv-tab-line: #e3e9e8;
+  --mv-tab-height: 68px;
+}
+
+.mv-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  direction: rtl;
+  background: #ffffff;
+  border-top: 1px solid var(--mv-tab-line);
+  box-shadow: 0 -4px 14px rgba(16, 24, 40, 0.06);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mv-tabbar__inner {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  max-width: 640px;
+  height: var(--mv-tab-height);
+  margin: 0 auto;
+}
+
+.mv-tab {
+  flex: 1 1 0;
+  min-width: 48px;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  margin: 0;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--mv-tab-idle);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mv-tab.is-active {
+  color: var(--mv-tab-active);
+  font-weight: 700;
+}
+
+.mv-tab:focus-visible {
+  outline: 3px solid #2456c8;
+  outline-offset: -3px;
+}
+
+.mv-tab__icon svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s ease;
+}
+
+.mv-tab.is-active .mv-tab__icon svg {
+  transform: translateY(-1px) scale(1.06);
+}
+
+.mv-tab.is-active .mv-tab__icon svg path,
+.mv-tab.is-active .mv-tab__icon svg circle {
+  fill: currentColor;
+}
+
+.mv-tab__label {
+  line-height: 1.2;
+}
+
+/* Leaves room so the last card is never hidden under the bar. */
+.app.has-tabbar {
+  padding-bottom: calc(var(--mv-tab-height) + 32px + env(safe-area-inset-bottom));
+}
+
+/* Short, soft fade when the tab's content changes. */
+@keyframes mvFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.app.is-entering {
+  animation: mvFadeIn 0.2s ease-out;
+}
+
+.mv-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.mv-stats dt { margin: 0; }
+.mv-stats dd { margin: 4px 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app.is-entering,
+  .mv-tab__icon svg {
+    animation: none;
+    transition: none;
+  }
+}
