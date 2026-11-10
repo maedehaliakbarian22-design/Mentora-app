@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CATALOG, indexCatalog } from '../www/js/content/catalog.js';
 import {
-  PROGRESS_KEY, PROGRESS_VERSION, defaultProgress, sanitizeProgress,
+  PROGRESS_KEY, PROGRESS_VERSION, BACKUP_PREFIX, defaultProgress, sanitizeProgress,
   recordAnswer, clearSection, setSelection, sectionAnswers, createProgressStore,
 } from '../www/js/progress/progress-store.js';
 
@@ -93,4 +93,58 @@ test('store round-trips and survives unparsable or unavailable storage', () => {
   const f = createProgressStore(failing, idx);
   assert.equal(f.load().storageOk, false);
   assert.equal(f.save(p), false);
+});
+
+test('legacy v2 data is backed up verbatim before the first save overwrites it', () => {
+  const legacy = JSON.stringify({ version: 2, selection: null, sections: {} });
+  const storage = fakeStorage({ [PROGRESS_KEY]: legacy });
+  const store = createProgressStore(storage, idx);
+  const loaded = store.load();
+  assert.equal(loaded.recovered, false);
+  assert.equal(store.save(loaded.progress), true);
+  const backups = [...storage._map.keys()].filter((k) => k.startsWith(BACKUP_PREFIX));
+  assert.equal(backups.length, 1);
+  assert.equal(storage._map.get(backups[0]), legacy);
+  assert.equal(JSON.parse(storage.getItem(PROGRESS_KEY)).version, PROGRESS_VERSION);
+});
+
+test('unparsable stored data is preserved in a backup before the recovered state is saved', () => {
+  const corrupt = '{not json';
+  const storage = fakeStorage({ [PROGRESS_KEY]: corrupt });
+  const store = createProgressStore(storage, idx);
+  const loaded = store.load();
+  assert.equal(loaded.recovered, true);
+  assert.equal(store.save(loaded.progress), true);
+  assert.ok([...storage._map.values()].includes(corrupt));
+});
+
+test('clean current-version data is saved without creating a backup', () => {
+  const storage = fakeStorage();
+  const first = createProgressStore(storage, idx);
+  assert.equal(first.save(recordAnswer(defaultProgress(), 'demo-q3', 1, idx)), true);
+  const again = createProgressStore(storage, idx);
+  const loaded = again.load();
+  assert.equal(again.save(loaded.progress), true);
+  assert.equal([...storage._map.keys()].some((k) => k.startsWith(BACKUP_PREFIX)), false);
+});
+
+test('if the backup cannot be verified, the original data is left untouched', () => {
+  const legacy = JSON.stringify({ version: 2, selection: null, sections: {} });
+  const map = new Map([[PROGRESS_KEY, legacy]]);
+  const storage = {
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => { if (!k.startsWith(BACKUP_PREFIX)) map.set(k, String(v)); },
+    removeItem: (k) => map.delete(k),
+  };
+  const store = createProgressStore(storage, idx);
+  const loaded = store.load();
+  assert.equal(store.save(loaded.progress), false);
+  assert.equal(map.get(PROGRESS_KEY), legacy);
+});
+
+test('a save whose main write does not read back is reported as failed', () => {
+  const storage = fakeStorage();
+  storage.setItem = (k, v) => { if (k !== PROGRESS_KEY) storage._map.set(k, String(v)); };
+  const store = createProgressStore(storage, idx);
+  assert.equal(store.save(defaultProgress()), false);
 });

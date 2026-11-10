@@ -15,6 +15,8 @@ import { createAttemptRecord } from '../attempts/attempt-record.js';
 export const PROGRESS_KEY = 'mentora.progress.v2';
 export const PROGRESS_VERSION = 3;
 const LEGACY_VERSION = 2;
+// Backup keys hold the original text of data that a save is about to replace.
+export const BACKUP_PREFIX = `${PROGRESS_KEY}.backup.`;
 
 export function defaultProgress() {
   return { version: PROGRESS_VERSION, selection: null, sections: {}, attempts: [] };
@@ -162,31 +164,65 @@ export function sectionAnswers(progress, sectionId) {
 }
 
 // Creates a store over any Storage-compatible object. Never throws.
+//
+// Data safety: when the stored text was unparsable, recovered, or an older schema
+// version, its original text is copied to a backup key and read back before the
+// first write replaces it. If the backup cannot be verified, nothing is written.
+// This module never overwrites or deletes an existing backup key.
 export function createProgressStore(storage, index) {
+  let originalText = null;
+  let needsBackup = false;
+  let backupKey = null;
   return {
     load() {
-      let raw = null;
+      let text = null;
       try {
-        const text = storage.getItem(PROGRESS_KEY);
-        if (text !== null) {
-          try {
-            raw = JSON.parse(text);
-          } catch {
-            return { progress: defaultProgress(), recovered: true, storageOk: true };
-          }
-        }
+        text = storage.getItem(PROGRESS_KEY);
       } catch {
         return { progress: defaultProgress(), recovered: false, storageOk: false };
       }
-      return { ...sanitizeProgress(raw, index), storageOk: true };
+      originalText = text;
+      if (text === null) {
+        needsBackup = false;
+        return { progress: defaultProgress(), recovered: false, storageOk: true };
+      }
+      let raw;
+      try {
+        raw = JSON.parse(text);
+      } catch {
+        needsBackup = true;
+        return { progress: defaultProgress(), recovered: true, storageOk: true };
+      }
+      const current = raw !== null && typeof raw === 'object' && raw.version === PROGRESS_VERSION;
+      const result = sanitizeProgress(raw, index);
+      needsBackup = result.recovered || !current;
+      return { ...result, storageOk: true };
     },
     save(progress) {
+      const json = JSON.stringify(progress);
       try {
-        storage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+        if (needsBackup && originalText !== null) {
+          if (backupKey === null) backupKey = freeBackupKey(storage);
+          storage.setItem(backupKey, originalText);
+          if (storage.getItem(backupKey) !== originalText) return false;
+        }
+        storage.setItem(PROGRESS_KEY, json);
+        if (storage.getItem(PROGRESS_KEY) !== json) return false;
+        needsBackup = false;
+        originalText = json;
+        backupKey = null;
         return true;
       } catch {
         return false;
       }
     },
   };
+}
+
+// First unused backup key. Existing backups are never replaced.
+function freeBackupKey(storage) {
+  const base = `${BACKUP_PREFIX}${Date.now()}`;
+  let key = base;
+  for (let n = 1; storage.getItem(key) !== null; n += 1) key = `${base}.${n}`;
+  return key;
 }
