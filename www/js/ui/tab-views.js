@@ -1,6 +1,7 @@
 // Pure HTML renderers for the bottom navigation, Home and Profile. Like
 // render.js: no DOM access, every interpolated value goes through esc(), and
-// numbers go through toFa().
+// numbers go through toFa(). A null percent (0 of 0) is shown as a message,
+// never as 0%.
 
 import { esc, toFa } from './render.js';
 
@@ -38,6 +39,12 @@ export function renderBottomNav(vm) {
 
 const demoBadge = () => '<span class="mv-badge">نمونه آزمایشی</span>';
 
+// Percent text for a possibly-null percent. Null means nothing is in scope yet.
+function percentSentence(percent, scopeWord) {
+  if (percent === null) return 'هنوز تمرینی برای این انتخاب آماده نشده است.';
+  return `${esc(toFa(percent))}٪ از ${scopeWord} این انتخاب پاسخ داده شده`;
+}
+
 // vm: { selectionLabel, overall: {answered,total,percent}, target: {...}|null }
 export function renderHome(vm) {
   let continueBlock;
@@ -56,6 +63,7 @@ export function renderHome(vm) {
     continueBlock = '<section class="mv-section"><h2>ادامه یادگیری</h2><p class="mv-note">همهٔ تمرین‌های این انتخاب را انجام داده‌اید.</p></section>';
   }
 
+  const pct = vm.overall.percent;
   return `<header class="mv-hero">
       <p class="mv-kicker">${esc(vm.selectionLabel)}</p>
       <h1 id="title" tabindex="-1" class="mv-title">خانه</h1>
@@ -64,8 +72,8 @@ export function renderHome(vm) {
     <section class="mv-section"><h2>خلاصهٔ پیشرفت</h2>
       <div class="mv-card">
         <p class="mv-big">${esc(toFa(vm.overall.answered))} از ${esc(toFa(vm.overall.total))}</p>
-        <p class="mv-meta">${esc(toFa(vm.overall.percent))}٪ از تمرین‌های این انتخاب پاسخ داده شده</p>
-        <div class="mv-progress" aria-hidden="true"><span style="width:${vm.overall.percent}%"></span></div>
+        <p class="mv-meta">${percentSentence(pct, 'تمرین‌های')}</p>
+        <div class="mv-progress" aria-hidden="true"><span style="width:${pct ?? 0}%"></span></div>
       </div></section>
     <section class="mv-section">
       <button type="button" class="mv-secondary" data-action="switch-tab" data-tab="learn">رفتن به دروس</button>
@@ -95,8 +103,8 @@ export function renderProfile(vm) {
       </dl>
     </section>
     <section class="mv-section"><h2>پیشرفت</h2>
-      <p class="mv-meta">${esc(toFa(s.percent))}٪ از تمرین‌های این انتخاب پاسخ داده شده</p>
-      <div class="mv-progress" aria-hidden="true"><span style="width:${s.percent}%"></span></div>
+      <p class="mv-meta">${percentSentence(s.percent, 'تمرین‌های')}</p>
+      <div class="mv-progress" aria-hidden="true"><span style="width:${s.percent ?? 0}%"></span></div>
     </section>
     <section class="mv-section"><h2>تنظیمات</h2>
       <button type="button" class="mv-secondary" data-action="change-selection">تغییر پایه یا رشته</button>

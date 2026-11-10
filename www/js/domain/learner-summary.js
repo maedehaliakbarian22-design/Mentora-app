@@ -3,6 +3,7 @@
 // counts and percentages of answers the learner has actually given.
 
 import { sectionAnswers } from '../progress/progress-store.js';
+import { percentOf } from './percent.js';
 
 // Chapter/section pairs inside the learner's selected grade and field, in
 // catalog order. Empty when nothing is selected.
@@ -23,6 +24,7 @@ export function scopeSections(index, selection) {
   return out;
 }
 
+// percent is null when there are no questions in scope (0 of 0).
 export function overallProgress(progress, index) {
   let answered = 0;
   let total = 0;
@@ -31,8 +33,7 @@ export function overallProgress(progress, index) {
     total += section.questions.length;
     answered += section.questions.filter((q) => answers[q.id] !== undefined).length;
   }
-  const percent = total === 0 ? 0 : Math.round((answered * 100) / total);
-  return { answered, total, percent };
+  return { answered, total, percent: percentOf(answered, total) };
 }
 
 // The first section, in catalog order, that still has an unanswered question.
@@ -62,7 +63,7 @@ export function learnerStats(progress, index) {
   return {
     attempts: progress.attempts.length,
     correct,
-    accuracyPercent: attempted.length === 0 ? null : Math.round((correct * 100) / attempted.length),
+    accuracyPercent: attempted.length === 0 ? null : percentOf(correct, attempted.length),
     sessions: new Set(progress.attempts.map((a) => a.sessionId)).size,
     ...overallProgress(progress, index),
   };
