@@ -175,18 +175,50 @@ export function renderPractice(vm) {
     ${action}`;
 }
 
-// vm: { section, result: {correct,total,percent}, hasDemo }
+// Empty states and copy for the two result lists. Each list has its own.
+const RESULT_EMPTY = {
+  correct: 'هیچ پاسخ درستی در این جلسه ثبت نشده است.',
+  incorrect: 'هیچ پاسخ نادرستی در این جلسه ثبت نشده است.',
+};
+
+// One answered question. Incorrect items also show the correct answer.
+function resultItemHtml(item, kind) {
+  const lines = [
+    `<p class="mv-result-item__prompt">${esc(toFa(item.prompt))}</p>`,
+    `<p class="mv-meta">پاسخ شما: ${esc(toFa(item.selectedText))}</p>`,
+  ];
+  if (kind === 'incorrect') {
+    lines.push(`<p class="mv-meta">پاسخ درست: ${esc(toFa(item.correctText))}</p>`);
+  }
+  return `<li class="mv-result-item is-${kind}">${lines.join('')}</li>`;
+}
+
+function resultListHtml(title, items, kind) {
+  const body = items.length === 0
+    ? `<p class="mv-note">${esc(RESULT_EMPTY[kind])}</p>`
+    : `<ul class="mv-result-list">${items.map((it) => resultItemHtml(it, kind)).join('')}</ul>`;
+  return `<section class="mv-section"><h2>${esc(title)} (${esc(toFa(items.length))})</h2>${body}</section>`;
+}
+
+// vm: { section, session: {correct:[item], incorrect:[item], total, percent}, hasDemo }
+// session comes from domain/session-results.js: only this launch's attempts.
+// percent is null for 0 of 0 and is shown as a dash, never as 0%.
 export function renderResult(vm) {
-  const message = vm.result.correct === vm.result.total
-    ? 'همهٔ پاسخ‌ها درست بود.'
-    : 'پاسخ‌های نادرست را دوباره مرور کنید.';
+  const s = vm.session;
+  const percentText = s.percent === null ? '—' : `${toFa(s.percent)}٪`;
+  let message;
+  if (s.total === 0) message = 'در این جلسه هنوز پاسخی برای این بخش ثبت نشده است.';
+  else if (s.incorrect.length === 0) message = 'همهٔ پاسخ‌ها درست بود.';
+  else message = 'پاسخ‌های نادرست را دوباره مرور کنید.';
   return `${renderTopBar({ title: 'نتیجهٔ تمرین', backLabel: 'بازگشت به بخش' })}
     <section class="mv-card mv-score">
-      <p class="mv-big">${esc(toFa(vm.result.correct))} از ${esc(toFa(vm.result.total))}</p>
-      <p class="mv-meta">${esc(toFa(vm.result.percent))}٪ درست</p>
+      <p class="mv-big">${esc(toFa(s.correct.length))} از ${esc(toFa(s.total))}</p>
+      <p class="mv-meta">${esc(percentText)} درست</p>
       <p>${esc(message)}</p>
       ${vm.hasDemo ? demoBadge() : ''}
     </section>
+    ${resultListHtml('پاسخ‌های درست', s.correct, 'correct')}
+    ${resultListHtml('پاسخ‌های نادرست', s.incorrect, 'incorrect')}
     <button type="button" class="mv-primary" data-action="back">بازگشت به بخش</button>
     <button type="button" class="mv-secondary" data-action="restart-section" data-section="${esc(vm.section.id)}">تمرین دوباره از ابتدا</button>`;
 }

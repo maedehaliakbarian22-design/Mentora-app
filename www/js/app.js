@@ -9,7 +9,8 @@ import {
 import { createAttemptRecord, newSessionId } from './attempts/attempt-record.js';
 import { createNavigator, ROUTES } from './core/navigation.js';
 import { registerBackButton } from './core/platform.js';
-import { evaluateAnswer, computeResult } from './domain/evaluate.js';
+import { evaluateAnswer } from './domain/evaluate.js';
+import { buildSessionResult } from './domain/session-results.js';
 import {
   newPracticeUi, selectOption, checkAnswer, requestAdvance,
 } from './domain/practice-flow.js';
@@ -289,11 +290,18 @@ function boot() {
         });
       }
       case ROUTES.RESULT: {
+        // Results are scoped to this launch (sessionId). Earlier sessions never appear here.
         const section = index.sections.get(route.sectionId);
-        const answers = sectionAnswers(progress, section.id);
-        const asEntries = Object.fromEntries(Object.entries(answers).map(([k, v]) => [k, { selectedIndex: v }]));
-        const result = computeResult(section.questions, asEntries);
-        return view.renderResult({ section, result, hasDemo: section.questions.some((q) => q.status === 'demo') });
+        const session = buildSessionResult({
+          questions: section.questions,
+          attempts: progress.attempts,
+          sessionId,
+        });
+        return view.renderResult({
+          section,
+          session,
+          hasDemo: section.questions.some((q) => q.status === 'demo'),
+        });
       }
       case ROUTES.HOME:
         if (!progress.selection) return screenFor({ name: ROUTES.SELECTION });

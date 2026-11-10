@@ -6,6 +6,20 @@ import * as view from '../www/js/ui/render.js';
 const idx = indexCatalog(CATALOG);
 const NOTICE = '«توضیح تأییدشدهٔ این پرسش هنوز در دسترس نیست.»';
 
+// Visible text only: tags (including attributes) removed.
+const visibleText = (html) => html.replace(/<[^>]*>/g, ' ');
+
+const sec = () => idx.sections.get('chapter-1-section-1');
+
+const wrongItem = {
+  questionId: 'q-w', prompt: 'سؤال نمونه', selectedIndex: 0,
+  selectedText: 'گزینهٔ الف', correctIndex: 1, correctText: 'گزینهٔ ب',
+};
+const rightItem = {
+  questionId: 'q-r', prompt: 'سؤال درست', selectedIndex: 1,
+  selectedText: 'گزینهٔ ب', correctIndex: 1, correctText: 'گزینهٔ ب',
+};
+
 test('toFa converts digits and esc escapes markup', () => {
   assert.equal(view.toFa('12 of 3'), '۱۲ of ۳');
   assert.equal(view.esc('<b>"x"&\'</b>'), '&lt;b&gt;&quot;x&quot;&amp;&#39;&lt;/b&gt;');
@@ -119,13 +133,17 @@ test('section with no questions shows the not-yet-available note, not a practice
 });
 
 test('user-visible output never names Learning State or its internal values', () => {
-  const sec = idx.sections.get('chapter-1-section-1');
+  const s = sec();
   const pieces = [
-    view.renderSection({ section: sec, total: 3, answered: 1, hasDemo: true }),
-    view.renderResult({ section: sec, result: { correct: 1, total: 3, percent: 33 }, hasDemo: true }),
+    view.renderSection({ section: s, total: 3, answered: 1, hasDemo: true }),
+    view.renderResult({
+      section: s,
+      session: { correct: [rightItem], incorrect: [wrongItem], total: 2, percent: 50 },
+      hasDemo: true,
+    }),
     view.renderDashboard({ selectionLabel: 'x', subjects: [] }),
     view.renderPractice({
-      section: sec, question: sec.questions[0], index: 0, total: 3,
+      section: s, question: s.questions[0], index: 0, total: 3,
       answer: { selectedIndex: 0, correct: false }, pending: null, isLast: false,
     }),
   ].join('\n');
@@ -141,4 +159,80 @@ test('every interpolated title is escaped in the chapter list', () => {
   });
   assert.equal(html.includes('<img'), false);
   assert.equal(html.includes('<script>'), false);
+});
+
+test('result lists an incorrect answer with the question, the selected answer and the correct answer', () => {
+  const html = view.renderResult({
+    section: sec(),
+    session: { correct: [], incorrect: [wrongItem], total: 1, percent: 0 },
+    hasDemo: false,
+  });
+  assert.ok(html.includes('سؤال نمونه'));
+  assert.ok(html.includes('پاسخ شما: گزینهٔ الف'));
+  assert.ok(html.includes('پاسخ درست: گزینهٔ ب'));
+});
+
+test('correct list shows the selected answer but never a separate correct-answer line', () => {
+  const html = view.renderResult({
+    section: sec(),
+    session: { correct: [rightItem], incorrect: [], total: 1, percent: 100 },
+    hasDemo: false,
+  });
+  assert.ok(html.includes('سؤال درست'));
+  assert.ok(html.includes('پاسخ شما: گزینهٔ ب'));
+  assert.equal(html.includes('پاسخ درست: '), false);
+});
+
+test('empty states are independent: no wrong answers still shows the correct list', () => {
+  const html = view.renderResult({
+    section: sec(),
+    session: { correct: [rightItem], incorrect: [], total: 1, percent: 100 },
+    hasDemo: false,
+  });
+  assert.ok(html.includes('هیچ پاسخ نادرستی در این جلسه ثبت نشده است.'));
+  assert.equal(html.includes('هیچ پاسخ درستی'), false);
+});
+
+test('empty states are independent: no right answers still shows the incorrect list', () => {
+  const html = view.renderResult({
+    section: sec(),
+    session: { correct: [], incorrect: [wrongItem], total: 1, percent: 0 },
+    hasDemo: false,
+  });
+  assert.ok(html.includes('هیچ پاسخ درستی در این جلسه ثبت نشده است.'));
+  assert.equal(html.includes('هیچ پاسخ نادرستی'), false);
+});
+
+test('0 of 0 shows a dash, the no-answers message, and both empty states', () => {
+  const html = view.renderResult({
+    section: sec(),
+    session: { correct: [], incorrect: [], total: 0, percent: null },
+    hasDemo: false,
+  });
+  assert.ok(html.includes('— درست'));
+  assert.ok(html.includes('در این جلسه هنوز پاسخی برای این بخش ثبت نشده است.'));
+  assert.ok(html.includes('هیچ پاسخ درستی'));
+  assert.ok(html.includes('هیچ پاسخ نادرستی'));
+  assert.ok(html.includes('۰ از ۰'));
+  assert.equal(html.includes('۰٪'), false);
+});
+
+test('1 of 8 shows Persian digits and 13 percent', () => {
+  const html = view.renderResult({
+    section: sec(),
+    session: { correct: [rightItem], incorrect: [], total: 8, percent: 13 },
+    hasDemo: false,
+  });
+  assert.ok(html.includes('۱ از ۸'));
+  assert.ok(html.includes('۱۳٪ درست'));
+  assert.equal(/[0-9]/.test(visibleText(html)), false);
+});
+
+test('result never shows a Latin digit in visible text, including list counts', () => {
+  const html = view.renderResult({
+    section: sec(),
+    session: { correct: [rightItem], incorrect: [wrongItem], total: 2, percent: 50 },
+    hasDemo: false,
+  });
+  assert.equal(/[0-9]/.test(visibleText(html)), false);
 });
