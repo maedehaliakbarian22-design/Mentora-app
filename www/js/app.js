@@ -10,7 +10,7 @@ import { createAttemptRecord, newSessionId } from './attempts/attempt-record.js'
 import { createNavigator, ROUTES } from './core/navigation.js';
 import { registerBackButton } from './core/platform.js';
 import { evaluateAnswer } from './domain/evaluate.js';
-import { buildSessionResult } from './domain/session-results.js';
+import { buildSessionResult, currentRunId } from './domain/session-results.js';
 import {
   newPracticeUi, selectOption, checkAnswer, requestAdvance,
 } from './domain/practice-flow.js';
@@ -49,9 +49,6 @@ function pickStorage() {
 
 function boot() {
   const index = indexCatalog(CATALOG);
-  // One session per app launch. Stored on every raw attempt so attempts from
-  // different launches can be told apart.
-  const sessionId = newSessionId();
   const { storage, usingMemory } = pickStorage();
   const store = createProgressStore(storage, index);
   const loaded = store.load();
@@ -159,6 +156,15 @@ function boot() {
     const section = index.sections.get(route.sectionId);
     const question = section && section.questions[route.index];
     return Boolean(question) && sectionAnswers(progress, section.id)[question.id] !== undefined;
+  }
+
+  // The practice run this section's answers belong to, or null when none are recorded.
+  function runIdFor(section) {
+    return currentRunId({
+      questions: section.questions,
+      attempts: progress.attempts,
+      answers: sectionAnswers(progress, section.id),
+    });
   }
 
   function advancePractice() {
@@ -290,12 +296,13 @@ function boot() {
         });
       }
       case ROUTES.RESULT: {
-        // Results are scoped to this launch (sessionId). Earlier sessions never appear here.
+        // The results of the practice run that owns this section's answers.
+        // A run is kept whole across an app restart.
         const section = index.sections.get(route.sectionId);
         const session = buildSessionResult({
           questions: section.questions,
           attempts: progress.attempts,
-          sessionId,
+          sessionId: runIdFor(section),
         });
         return view.renderResult({
           section,
@@ -399,14 +406,16 @@ function boot() {
         const { ui: nextUi, outcome } = checkAnswer(ui, isAnsweredNow(route), question);
         practiceUi = nextUi;
         if (!outcome) return render();
-        // One raw attempt per Check, appended. The latest-answer map is updated
-        // in the same commit, so it can always be rebuilt from attempts.
+        // One raw attempt per Check, appended. The attempt carries the run id, so
+        // the run is recovered after a restart. The answer map is updated in the
+        // same commit, so it can always be rebuilt from attempts.
+        const runId = runIdFor(section) ?? newSessionId();
         const attemptNumber = progress.attempts.filter((a) => a.itemId === question.id).length + 1;
         const record = createAttemptRecord({
           itemId: question.id,
           attemptNumber,
           status: 'attempted',
-          sessionId,
+          sessionId: runId,
           selectedIndex: outcome.selectedIndex,
           isCorrect: outcome.correct,
           elapsedTimeMs: Math.max(0, Math.round(Date.now() - ui.shownAt)),
