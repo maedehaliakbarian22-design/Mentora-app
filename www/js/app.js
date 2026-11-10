@@ -11,8 +11,7 @@ import { createNavigator, ROUTES } from './core/navigation.js';
 import { registerBackButton } from './core/platform.js';
 import { evaluateAnswer, computeResult } from './domain/evaluate.js';
 import {
-  newPracticeUi, selectOption, checkAnswer, autoAdvancePlan,
-  requestAdvance, cancelAutoAdvance,
+  newPracticeUi, selectOption, checkAnswer, requestAdvance,
 } from './domain/practice-flow.js';
 import * as view from './ui/render.js';
 import * as tabViews from './ui/tab-views.js';
@@ -100,8 +99,6 @@ function boot() {
   // Practice-only UI state. Held in memory and never persisted, so a pending
   // selection is lost on restart by design.
   let practiceUi = null;
-  let autoAdvanceTimer = null;
-  let autoAdvanceKey = null;
 
   function commit(next) {
     progress = next;
@@ -112,7 +109,6 @@ function boot() {
   // Android back: pop the active tab's stack; from a non-home tab's root go to
   // Home; at Home's root return false so the app can close.
   function goBack() {
-    clearAutoAdvance();
     const action = resolveBack({
       activeTab,
       canPop: nav.canGoBack(),
@@ -134,7 +130,6 @@ function boot() {
 
   function switchTab(tab) {
     if (!isTab(tab)) return undefined;
-    clearAutoAdvance();
     if (tab === activeTab) {
       // Tapping the active tab returns it to its root screen.
       navs[tab].reset(ROOTS[tab]);
@@ -165,17 +160,6 @@ function boot() {
     return Boolean(question) && sectionAnswers(progress, section.id)[question.id] !== undefined;
   }
 
-  // Cancels a scheduled automatic advance and marks it cancelled, so a late
-  // timer cannot advance the learner.
-  function clearAutoAdvance() {
-    if (autoAdvanceTimer !== null) {
-      clearTimeout(autoAdvanceTimer);
-      autoAdvanceTimer = null;
-    }
-    autoAdvanceKey = null;
-    if (practiceUi) practiceUi = cancelAutoAdvance(practiceUi);
-  }
-
   function advancePractice() {
     const route = nav.current();
     if (route.name !== ROUTES.PRACTICE) return;
@@ -188,31 +172,16 @@ function boot() {
     render();
   }
 
-  // Shared by Continue and the automatic timer. The flow module guarantees the
-  // advance happens at most once per question.
-  function tryAdvance(source) {
+  // Continue is the only way to advance. The flow module keeps it to once per question.
+  function tryAdvance() {
     const route = nav.current();
     if (route.name !== ROUTES.PRACTICE) return false;
     const ui = uiFor(route);
-    const result = requestAdvance(ui, isAnsweredNow(route), source);
+    const result = requestAdvance(ui, isAnsweredNow(route));
     practiceUi = result.ui;
     if (!result.advance) return false;
-    clearAutoAdvance();
     advancePractice();
     return true;
-  }
-
-  function onAutoAdvanceFired(key) {
-    if (key !== autoAdvanceKey) return;
-    autoAdvanceTimer = null;
-    autoAdvanceKey = null;
-    tryAdvance('timer');
-  }
-
-  // Background cancels the automatic advance. The correct panel stays visible
-  // and waits for Continue when the app returns.
-  function onVisibilityChange() {
-    if (document.visibilityState === 'hidden') clearAutoAdvance();
   }
 
   // ----- derived view models -------------------------------------------------
@@ -435,18 +404,11 @@ function boot() {
           elapsedTimeMs: Math.max(0, Math.round(Date.now() - ui.shownAt)),
         });
         commit(appendAttempt(recordAnswer(progress, question.id, outcome.selectedIndex, index), record, index));
-        const plan = autoAdvancePlan(outcome);
-        if (plan.scheduleMs !== null) {
-          const key = practiceKey(route);
-          autoAdvanceKey = key;
-          autoAdvanceTimer = setTimeout(() => onAutoAdvanceFired(key), plan.scheduleMs);
-        }
         return undefined;
       }
       case 'continue':
-        return tryAdvance('continue');
+        return tryAdvance();
       case 'restart-section':
-        clearAutoAdvance();
         practiceUi = null;
         commit(clearSection(progress, ds.section));
         nav.back();
@@ -464,7 +426,6 @@ function boot() {
   appEl.addEventListener('click', onActionClick);
   tabbarEl.addEventListener('click', onActionClick);
 
-  document.addEventListener('visibilitychange', onVisibilityChange);
 
   // Android hardware back: pop the in-app stack; at the root the app exits.
   registerBackButton(() => goBack(), window);
