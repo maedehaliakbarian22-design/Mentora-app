@@ -4,6 +4,8 @@ import { CATALOG, indexCatalog } from '../www/js/content/catalog.js';
 import {
   PROGRESS_KEY, PROGRESS_VERSION, BACKUP_PREFIX, defaultProgress, sanitizeProgress,
   recordAnswer, clearSection, setSelection, sectionAnswers, createProgressStore,
+  SECTION_COMPLETE_XP, repairAwardsFromLog, migrateCompletedSections,
+  isSectionCompleteInLog, isSectionCompleted, getXp, sectionAwardKey,
 } from '../www/js/progress/progress-store.js';
 
 const idx = indexCatalog(CATALOG);
@@ -158,4 +160,142 @@ test('a save whose main write does not read back is reported as failed', () => {
   storage.setItem = (k, v) => { if (k !== PROGRESS_KEY) storage._map.set(k, String(v)); };
   const store = createProgressStore(storage, idx);
   assert.equal(store.save(defaultProgress()), false);
+});
+
+
+// --- XP awards (policy A, schema v4) ---
+
+test('default progress includes empty awards and xp 0', () => {
+  const d = defaultProgress();
+  assert.equal(d.xp, 0);
+  assert.deepEqual(d.awards, {});
+  assert.deepEqual(d.unprovenLegacyCompletions, {});
+  assert.equal(d.version, 4);
+});
+
+test('sanitizeProgress migrates v3 selection without dropping data', () => {
+  const raw = {
+    version: 3,
+    selection: { gradeId: 'grade-10', fieldId: 'experimental' },
+    sections: {},
+    attempts: [],
+  };
+  const r = sanitizeProgress(raw, idx);
+  assert.equal(r.progress.version, 4);
+  assert.equal(r.progress.xp, 0);
+  assert.deepEqual(r.progress.selection, { gradeId: 'grade-10', fieldId: 'experimental' });
+});
+
+test('isSectionCompleteInLog requires every question to have a log record', () => {
+  const sectionId = 'chapter-1-section-1';
+  const section = idx.sections.get(sectionId);
+  assert.ok(section.questions.length >= 1);
+  assert.equal(isSectionCompleteInLog(sectionId, [], idx), false);
+  const partial = [{ sectionId, questionId: section.questions[0].id }];
+  if (section.questions.length > 1) {
+    assert.equal(isSectionCompleteInLog(sectionId, partial, idx), false);
+  }
+  const full = section.questions.map((q) => ({ sectionId, questionId: q.id }));
+  assert.equal(isSectionCompleteInLog(sectionId, full, idx), true);
+});
+
+test('repairAwardsFromLog awards once per sectionId (policy A)', () => {
+  const sectionId = 'chapter-1-section-1';
+  const section = idx.sections.get(sectionId);
+  const records = section.questions.map((q) => ({ sectionId, questionId: q.id }));
+  let p = defaultProgress();
+  const r1 = repairAwardsFromLog(p, records, idx, '1', { now: () => new Date('2026-01-01T00:00:00Z') });
+  assert.equal(r1.changed, true);
+  assert.ok(r1.newlyAwarded.includes(sectionId));
+  assert.equal(getXp(r1.progress), SECTION_COMPLETE_XP);
+  assert.equal(isSectionCompleted(r1.progress, sectionId), true);
+
+  const r2 = repairAwardsFromLog(r1.progress, records, idx, '1');
+  assert.equal(r2.changed, false);
+  assert.equal(getXp(r2.progress), SECTION_COMPLETE_XP);
+
+  // New catalog version does not pay again (policy A)
+  const r3 = repairAwardsFromLog(r1.progress, records, idx, '2');
+  assert.equal(r3.changed, false);
+  assert.equal(getXp(r3.progress), SECTION_COMPLETE_XP);
+});
+
+test('tampered xp is recomputed from awards on sanitize', () => {
+  const sectionId = 'chapter-1-section-1';
+  const key = sectionAwardKey(sectionId, '1');
+  const raw = {
+    version: 4,
+    selection: null,
+    sections: {},
+    attempts: [],
+    xp: 9999,
+    awards: {
+      [key]: {
+        type: 'section_complete',
+        sectionId,
+        catalogVersion: '1',
+        questionIds: ['demo-q1'],
+        xp: SECTION_COMPLETE_XP,
+        at: '2026-01-01T00:00:00.000Z',
+        source: 'log',
+      },
+    },
+  };
+  const r = sanitizeProgress(raw, idx);
+  assert.equal(r.progress.xp, SECTION_COMPLETE_XP);
+});
+
+test('unproven legacy completedSections do not add XP but are retained', () => {
+  const p0 = {
+    ...defaultProgress(),
+    completedSections: {
+      'chapter-1-section-1': { xp: 10, at: '2026-01-01T00:00:00.000Z' },
+    },
+  };
+  // No log records → unproven
+  const m = migrateCompletedSections(p0, [], idx, '1');
+  assert.ok(m.progress.unprovenLegacyCompletions['chapter-1-section-1']);
+  assert.equal(getXp(m.progress), 0);
+  assert.equal(Object.keys(m.progress.awards).length, 0);
+});
+
+test('legacy completedSections become awards when Log proves completion', () => {
+  const sectionId = 'chapter-1-section-1';
+  const section = idx.sections.get(sectionId);
+  const records = section.questions.map((q) => ({ sectionId, questionId: q.id }));
+  const p0 = {
+    ...defaultProgress(),
+    completedSections: { [sectionId]: { xp: 10, at: '2026-01-01T00:00:00.000Z' } },
+  };
+  const m = migrateCompletedSections(p0, records, idx, '1');
+  assert.equal(getXp(m.progress), SECTION_COMPLETE_XP);
+  assert.equal(isSectionCompleted(m.progress, sectionId), true);
+  assert.equal(m.progress.unprovenLegacyCompletions[sectionId], undefined);
+});
+
+test('createProgressStore persists awards and restores xp', () => {
+  const storage = fakeStorage();
+  const store = createProgressStore(storage, idx);
+  const sectionId = 'chapter-1-section-1';
+  const section = idx.sections.get(sectionId);
+  const records = section.questions.map((q) => ({ sectionId, questionId: q.id }));
+  const awarded = repairAwardsFromLog(defaultProgress(), records, idx, '1', {
+    now: () => new Date('2026-06-01T12:00:00Z'),
+  });
+  assert.equal(store.save(awarded.progress), true);
+  const loaded = store.load();
+  assert.equal(getXp(loaded.progress), SECTION_COMPLETE_XP);
+  assert.equal(isSectionCompleted(loaded.progress, sectionId), true);
+});
+
+test('clearSection does not remove awards or xp', () => {
+  const sectionId = 'chapter-1-section-1';
+  const section = idx.sections.get(sectionId);
+  const records = section.questions.map((q) => ({ sectionId, questionId: q.id }));
+  let p = repairAwardsFromLog(defaultProgress(), records, idx, '1').progress;
+  for (const q of section.questions) p = recordAnswer(p, q.id, 0, idx);
+  p = clearSection(p, sectionId);
+  assert.equal(getXp(p), SECTION_COMPLETE_XP);
+  assert.equal(isSectionCompleted(p, sectionId), true);
+  assert.deepEqual(sectionAnswers(p, sectionId), {});
 });

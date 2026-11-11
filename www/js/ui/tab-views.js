@@ -90,6 +90,14 @@ export function renderProfile(vm) {
       <p class="mv-kicker">${esc(vm.selectionLabel)}</p>
       <h1 id="title" tabindex="-1" class="mv-title">پروفایل</h1>
     </header>
+    <section class="mv-section"><h2>امتیاز و پیشرفت</h2>
+      <dl class="mv-stats">
+        <div class="mv-card"><dt class="mv-meta">امتیاز تجربه (XP)</dt>
+          <dd class="mv-big">${esc(toFa(s.xp ?? 0))}</dd></div>
+        <div class="mv-card"><dt class="mv-meta">مبحث‌های تکمیل‌شده</dt>
+          <dd class="mv-big">${esc(toFa(s.completedSections ?? 0))}</dd></div>
+      </dl>
+    </section>
     <section class="mv-section"><h2>آمار یادگیری</h2>
       <dl class="mv-stats">
         <div class="mv-card"><dt class="mv-meta">پاسخ‌های پاسخ‌داده‌شده</dt>

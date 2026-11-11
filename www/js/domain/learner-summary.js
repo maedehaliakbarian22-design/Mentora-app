@@ -60,11 +60,23 @@ export function continueTarget(progress, index) {
 export function learnerStats(progress, index) {
   const attempted = progress.attempts.filter((a) => a.status === 'attempted');
   const correct = attempted.filter((a) => a.isCorrect === true).length;
+  const awards = progress.awards && typeof progress.awards === 'object' ? progress.awards : {};
+  const completedIds = new Set(
+    Object.values(awards)
+      .filter((a) => a && a.type === 'section_complete' && a.sectionId)
+      .map((a) => a.sectionId),
+  );
+  const xp = Number.isFinite(progress.xp) && progress.xp >= 0
+    ? Math.floor(progress.xp)
+    : 0;
+  const completedCount = completedIds.size;
   return {
     attempts: progress.attempts.length,
     correct,
     accuracyPercent: attempted.length === 0 ? null : percentOf(correct, attempted.length),
     sessions: new Set(progress.attempts.map((a) => a.sessionId)).size,
+    xp,
+    completedSections: completedCount,
     ...overallProgress(progress, index),
   };
 }

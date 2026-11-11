@@ -128,17 +128,19 @@ test('rebuilt answers match the latest-answer map after Check', () => {
 
 // ----- storage schema -------------------------------------------------------
 
-test('storage schema is version 3 and the defaults carry an empty attempt log', () => {
-  assert.equal(PROGRESS_VERSION, 3);
+test('storage schema is version 4 and the defaults carry an empty attempt log', () => {
+  assert.equal(PROGRESS_VERSION, 4);
   assert.deepEqual(defaultProgress().attempts, []);
+  assert.equal(defaultProgress().xp, 0);
 });
 
 test('a version 2 record migrates in place with empty attempts and no recovery notice', () => {
   const v2 = { version: 2, selection: null, sections: { [SECTION]: { answers: { 'demo-q1': 1 } } } };
   const r = sanitizeProgress(v2, idx);
   assert.equal(r.recovered, false);
-  assert.equal(r.progress.version, 3);
+  assert.equal(r.progress.version, 4);
   assert.deepEqual(r.progress.attempts, []);
+  assert.equal(r.progress.xp, 0);
   assert.deepEqual(sectionAnswers(r.progress, SECTION), { 'demo-q1': 1 });
 });
 

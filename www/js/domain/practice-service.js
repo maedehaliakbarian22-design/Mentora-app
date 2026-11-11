@@ -10,6 +10,7 @@
 
 import {
   createProgressStore, defaultProgress, sectionState, clearSection, PROGRESS_KEY,
+  repairAwardsFromLog, migrateCompletedSections, getXp,
 } from '../progress/progress-store.js';
 import { createAttemptLog, validateAttemptRecord, toView, toLocalIso } from '../attempts/attempt-log.js';
 import { migrateLegacyAttempts, legacyAttemptsToRecords, readEmbeddedLegacyAttempts } from '../attempts/legacy-migration.js';
@@ -79,6 +80,19 @@ export function createPracticeService({
     }
     if (changed) {
       progress = { ...progress, sections };
+    }
+
+    // Migrate interim completedSections → awards / unproven (never drop claims).
+    const migrated = migrateCompletedSections(progress, records, index, catalogVersion);
+    progress = migrated.progress;
+    if (migrated.changed) changed = true;
+
+    // Prove completions from Attempt Log and award once (policy A).
+    const repaired = repairAwardsFromLog(progress, records, index, catalogVersion, { now });
+    progress = repaired.progress;
+    if (repaired.changed) changed = true;
+
+    if (changed) {
       if (!store.save(progress)) notices.push('save-failed');
     }
   }
@@ -128,12 +142,30 @@ export function createPracticeService({
     if (!written.ok) return { ok: false, reason: 'log-write', detail: written.reason };
     records = [...records, v.record];
 
-    const saved = commitSection(sectionId, {
+    const nextState = {
       answers: { ...state.answers, [questionId]: selectedIndex },
       runId,
       closedRunIds: state.closedRunIds,
-    });
-    return { ok: true, saved, record: v.record };
+    };
+    progress = {
+      ...progress,
+      sections: { ...progress.sections, [sectionId]: nextState },
+    };
+    // Award from Attempt Log (includes the record just appended). Policy A.
+    const beforeXp = getXp(progress);
+    const repaired = repairAwardsFromLog(progress, records, index, catalogVersion, { now });
+    progress = repaired.progress;
+    const xpGained = getXp(progress) - beforeXp;
+    const saved = store.save(progress);
+    // If save failed, in-memory awards remain; boot() will repair from Log later.
+    return {
+      ok: true,
+      saved,
+      record: v.record,
+      xpAwarded: repaired.newlyAwarded.includes(sectionId),
+      xpGained,
+      totalXp: getXp(progress),
+    };
   }
 
   // Restart: closes the section's run and clears its answers. Log records stay.

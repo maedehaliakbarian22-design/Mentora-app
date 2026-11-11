@@ -178,3 +178,45 @@ test('legacy attempts still embedded (migration failed) remain visible in the re
   assert.ok(s.notices().includes('migration-incomplete'));
   assert.equal(s.result(SEC).total, 1);
 });
+
+// --- XP repair (F1/F2) ---
+import { getXp, isSectionCompleted, SECTION_COMPLETE_XP } from '../www/js/progress/progress-store.js';
+
+test('completing all questions in a section awards XP once via the service', () => {
+  const storage = fakeStorage();
+  const service = open(storage);
+  const section = idx.sections.get(SEC);
+  // demo answers: q1→1, q2→0, q3→1
+  const picks = { 'demo-q1': 1, 'demo-q2': 0, 'demo-q3': 1 };
+  let last = null;
+  for (const q of section.questions) {
+    last = service.check(SEC, q.id, picks[q.id] ?? 0);
+    assert.equal(last.ok, true, q.id);
+  }
+  assert.equal(last.xpAwarded, true);
+  assert.equal(last.totalXp, SECTION_COMPLETE_XP);
+  assert.equal(getXp(service.progress()), SECTION_COMPLETE_XP);
+  assert.equal(isSectionCompleted(service.progress(), SEC), true);
+
+  const again = service.check(SEC, section.questions[0].id, picks[section.questions[0].id] ?? 0);
+  assert.equal(again.ok, false);
+  assert.equal(getXp(service.progress()), SECTION_COMPLETE_XP);
+});
+
+test('boot restores XP from Attempt Log when progress awards were missing', () => {
+  const storage = fakeStorage();
+  const s1 = open(storage);
+  const section = idx.sections.get(SEC);
+  const picks = { 'demo-q1': 1, 'demo-q2': 0, 'demo-q3': 1 };
+  for (const q of section.questions) {
+    assert.equal(s1.check(SEC, q.id, picks[q.id] ?? 0).ok, true);
+  }
+  const raw = JSON.parse(storage.getItem(PROGRESS_KEY));
+  raw.awards = {};
+  raw.xp = 0;
+  storage.setItem(PROGRESS_KEY, JSON.stringify(raw));
+
+  const s2 = open(storage);
+  assert.equal(getXp(s2.progress()), SECTION_COMPLETE_XP);
+  assert.equal(isSectionCompleted(s2.progress(), SEC), true);
+});

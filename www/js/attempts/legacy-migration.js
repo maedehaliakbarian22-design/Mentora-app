@@ -68,7 +68,10 @@ export function readEmbeddedLegacyAttempts(progressText) {
   } catch {
     return [];
   }
-  if (!raw || typeof raw !== 'object' || raw.version !== PROGRESS_VERSION || !Array.isArray(raw.attempts)) return [];
+  // Embedded attempts existed in schema v3. Accept v3 and current version so
+  // an unfinished migration still completes after a schema bump.
+  const embedVersions = new Set([3, PROGRESS_VERSION]);
+  if (!raw || typeof raw !== 'object' || !embedVersions.has(raw.version) || !Array.isArray(raw.attempts)) return [];
   const out = [];
   for (const entry of raw.attempts) {
     try {
@@ -124,7 +127,15 @@ export function migrateLegacyAttempts(storage, index) {
     return { status: 'failed', step: 'backup' };
   }
 
-  const next = JSON.stringify({ ...raw, attempts: [] });
+  const next = JSON.stringify({
+    ...raw,
+    version: PROGRESS_VERSION,
+    attempts: [],
+    xp: Number.isFinite(raw.xp) && raw.xp >= 0 ? Math.floor(raw.xp) : 0,
+    completedSections: (raw.completedSections && typeof raw.completedSections === 'object' && !Array.isArray(raw.completedSections))
+      ? raw.completedSections
+      : {},
+  });
   try {
     storage.setItem(PROGRESS_KEY, next);
     if (storage.getItem(PROGRESS_KEY) !== next) return { status: 'partial', step: 'progress-readback' };
