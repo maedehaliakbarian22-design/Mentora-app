@@ -1,14 +1,15 @@
 // Local, device-only progress persistence. Stores raw facts only:
-//   - `attempts`: append-only raw attempt records (one per Check), each with
-//     session identity and response timing. Never rewritten.
-//   - `sections`: the latest chosen option per question, kept for display. It can
-//     be rebuilt from `attempts` (see deriveAnswersFromAttempts).
+//   - `sections`: per section, a CACHE of the learner's answers (chosen option
+//     index per question), the active practice run id, and the run ids that a
+//     restart has closed. The cache is rebuilt from the Attempt Log on load.
 //   - `selection`: the learner's grade/field choice.
+//   - `attempts`: LEGACY ONLY. Read for migration, written as [] after the
+//     migration to the Attempt Log (mentora.attempts.v1). Never a source of truth.
 // Correctness is always recomputed from catalog content. No Learning State is
 // stored or derived here.
 //
-// Storage schema version 3. The storage key is unchanged from v2 so existing
-// data is migrated in place. Learning algorithm versions are a separate concern.
+// Storage schema version 3. The storage key is unchanged, so existing data is
+// read in place.
 
 import { createAttemptRecord } from '../attempts/attempt-record.js';
 
@@ -22,10 +23,24 @@ export function defaultProgress() {
   return { version: PROGRESS_VERSION, selection: null, sections: {}, attempts: [] };
 }
 
+export function emptySectionState() {
+  return { answers: {}, runId: null, closedRunIds: [] };
+}
+
+// Section state with defaults. Never undefined.
+export function sectionState(progress, sectionId) {
+  const s = progress.sections[sectionId];
+  if (!s) return emptySectionState();
+  return {
+    answers: s.answers || {},
+    runId: typeof s.runId === 'string' && s.runId ? s.runId : null,
+    closedRunIds: Array.isArray(s.closedRunIds) ? s.closedRunIds : [],
+  };
+}
+
 // Returns { progress, recovered }. `recovered` is true when stored data existed
 // but was structurally invalid; the invalid part is dropped and reported.
 // Unknown ids (content removed in a later release) are dropped silently.
-// A v2 record is migrated: it had no attempts, so attempts start empty.
 export function sanitizeProgress(raw, index) {
   if (raw === null || raw === undefined) return { progress: defaultProgress(), recovered: false };
   if (typeof raw !== 'object' || Array.isArray(raw)) {
@@ -68,7 +83,8 @@ export function sanitizeProgress(raw, index) {
         recovered = true;
       }
     }
-    progress.sections[sectionId] = { answers };
+    const state = sectionState({ sections: { [sectionId]: { ...entry, answers } } }, sectionId);
+    progress.sections[sectionId] = state;
   }
 
   if (raw.version === PROGRESS_VERSION) {
@@ -86,9 +102,9 @@ export function sanitizeProgress(raw, index) {
   return { progress, recovered };
 }
 
-// Validates one stored attempt against the catalog. Correctness is recomputed,
-// never trusted. Returns { record } on success, { unknownItem: true } for content
-// removed from the catalog (dropped silently), or { invalid: true }.
+// Validates one legacy stored attempt against the catalog. Correctness is
+// recomputed, never trusted. Returns { record } on success, { unknownItem: true }
+// for content removed from the catalog (dropped silently), or { invalid: true }.
 function sanitizeAttempt(entry, index) {
   if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return { invalid: true };
   let record;
@@ -105,14 +121,44 @@ function sanitizeAttempt(entry, index) {
     ? record.selectedIndex === q.correctIndex
     : null;
   if (record.isCorrect !== expected) {
-    // Stored correctness disagreed with the catalog. Use the recomputed value
-    // and report the record as recovered.
     return { record: createAttemptRecord({ ...entry, isCorrect: expected }), invalid: true };
   }
   return { record };
 }
 
-// Pure. Appends one raw attempt. Earlier attempts are never changed or removed.
+// Pure updates: each returns a new progress object. They keep the rest of the
+// section state (run id, closed runs).
+export function recordAnswer(progress, questionId, selectedIndex, index) {
+  const q = index.questions.get(questionId);
+  if (!q) throw new RangeError(`unknown question: ${questionId}`);
+  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= q.options.length) {
+    throw new RangeError(`selectedIndex out of range: ${String(selectedIndex)}`);
+  }
+  const prev = sectionState(progress, q.sectionId);
+  return {
+    ...progress,
+    sections: {
+      ...progress.sections,
+      [q.sectionId]: { ...prev, answers: { ...prev.answers, [questionId]: selectedIndex } },
+    },
+  };
+}
+
+// Restart: clears the section's answers and closes its active run. The closed
+// run's attempts stay in the Attempt Log; they are never shown as current again.
+export function clearSection(progress, sectionId) {
+  const prev = sectionState(progress, sectionId);
+  const closed = prev.runId && !prev.closedRunIds.includes(prev.runId)
+    ? [...prev.closedRunIds, prev.runId]
+    : prev.closedRunIds;
+  return {
+    ...progress,
+    sections: { ...progress.sections, [sectionId]: { answers: {}, runId: null, closedRunIds: closed } },
+  };
+}
+
+// Kept for compatibility with earlier callers. Pure: returns a new progress with
+// the attempt appended. New code writes through the Attempt Log instead.
 export function appendAttempt(progress, record, index) {
   const q = index.questions.get(record.itemId);
   if (!q) throw new RangeError(`unknown question: ${record.itemId}`);
@@ -122,8 +168,7 @@ export function appendAttempt(progress, record, index) {
   return { ...progress, attempts: [...progress.attempts, record] };
 }
 
-// Rebuilds the latest chosen option per question from the raw attempts. Only
-// attempted records with a selectedIndex count. The last one for a question wins.
+// Rebuilds the latest chosen option per question from legacy attempts.
 export function deriveAnswersFromAttempts(attempts) {
   const answers = {};
   for (const rec of attempts) {
@@ -132,35 +177,12 @@ export function deriveAnswersFromAttempts(attempts) {
   return answers;
 }
 
-// Pure updates: each returns a new progress object.
-export function recordAnswer(progress, questionId, selectedIndex, index) {
-  const q = index.questions.get(questionId);
-  if (!q) throw new RangeError(`unknown question: ${questionId}`);
-  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= q.options.length) {
-    throw new RangeError(`selectedIndex out of range: ${String(selectedIndex)}`);
-  }
-  const prev = progress.sections[q.sectionId] || { answers: {} };
-  return {
-    ...progress,
-    sections: {
-      ...progress.sections,
-      [q.sectionId]: { answers: { ...prev.answers, [questionId]: selectedIndex } },
-    },
-  };
-}
-
-export function clearSection(progress, sectionId) {
-  const sections = { ...progress.sections };
-  delete sections[sectionId];
-  return { ...progress, sections };
-}
-
 export function setSelection(progress, selection) {
   return { ...progress, selection };
 }
 
 export function sectionAnswers(progress, sectionId) {
-  return (progress.sections[sectionId] && progress.sections[sectionId].answers) || {};
+  return sectionState(progress, sectionId).answers;
 }
 
 // Creates a store over any Storage-compatible object. Never throws.
@@ -219,8 +241,8 @@ export function createProgressStore(storage, index) {
   };
 }
 
-// First unused backup key. Existing backups are never replaced.
-function freeBackupKey(storage) {
+// First unused progress backup key. Existing backups are never replaced.
+export function freeBackupKey(storage) {
   const base = `${BACKUP_PREFIX}${Date.now()}`;
   let key = base;
   for (let n = 1; storage.getItem(key) !== null; n += 1) key = `${base}.${n}`;

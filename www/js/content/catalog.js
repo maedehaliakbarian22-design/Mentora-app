@@ -7,6 +7,12 @@
 //     and has no textbook source. It is labelled as demo in the UI.
 //   - A question with status 'verified' must carry a source reference. No
 //     verified questions exist yet: real Chapter 1 content is still needed.
+//
+// Option identity: every question has `optionIds`, parallel to `options`.
+// An option's id travels with its text. Attempts store the id (selectedOptionId),
+// never the array position, so reordering options does not change history.
+// Reorder `options` and `optionIds` together, and keep `correctIndex` pointing
+// at the correct text.
 
 export const CATALOG = Object.freeze({
   version: 1,
@@ -52,6 +58,7 @@ export const CATALOG = Object.freeze({
               status: 'demo',
               prompt: 'نمونه: حاصل ۲ + ۳ چند است؟',
               options: Object.freeze(['4', '5', '6']),
+              optionIds: Object.freeze(['o-4', 'o-5', 'o-6']),
               correctIndex: 1,
             }),
             Object.freeze({
@@ -59,6 +66,7 @@ export const CATALOG = Object.freeze({
               status: 'demo',
               prompt: 'نمونه: حاصل ۱۰ − ۴ چند است؟',
               options: Object.freeze(['6', '5', '4']),
+              optionIds: Object.freeze(['o-6', 'o-5', 'o-4']),
               correctIndex: 0,
             }),
             Object.freeze({
@@ -66,6 +74,7 @@ export const CATALOG = Object.freeze({
               status: 'demo',
               prompt: 'نمونه: حاصل ۳ × ۴ چند است؟',
               options: Object.freeze(['7', '12', '14']),
+              optionIds: Object.freeze(['o-7', 'o-12', 'o-14']),
               correctIndex: 1,
             }),
           ]),

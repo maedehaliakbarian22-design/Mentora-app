@@ -2,18 +2,16 @@
 // question content, returns view-ready facts.
 //
 // A practice run is one start-to-result pass through a section (SPEC v3 §13.9:
-// sessionId). Every attempt in a run carries that run's id as sessionId. Only
-// attempts with the given run id count, so earlier runs never leak in. Within a
-// run the latest attempt per question wins. Correctness is recomputed from the
-// question content on every call, never read from the stored isCorrect flag.
+// sessionId). Only attempts with the given run id count, so earlier runs never
+// leak in. Within a run the latest attempt per question wins. Correctness is
+// recomputed from the question content on every call, never read from the
+// stored isCorrect flag.
 
 import { evaluateAnswer } from './evaluate.js';
 import { percentOf } from './percent.js';
 
-// The run that owns the section's current answers, or null when there are none.
-// While answers are recorded the run continues, so the latest attempt's id is
-// returned. This keeps a run whole across an app restart. restart-section clears
-// the answers, so the next run starts from null and gets a new id.
+// Legacy fallback only: the run that owns the section's answers, derived from
+// attempts. The practice service uses an explicitly stored run id instead.
 export function currentRunId({ questions, attempts, answers }) {
   const answered = questions.some((q) => answers[q.id] !== undefined);
   if (!answered) return null;
@@ -24,10 +22,10 @@ export function currentRunId({ questions, attempts, answers }) {
   return null;
 }
 
-// questions: the section's questions (catalog order). attempts: all raw attempts
-// (oldest first). sessionId: the run id, or null for no run. Returns
-// { correct, incorrect, total, percent }; each item is
-// { questionId, prompt, selectedIndex, selectedText, correctIndex, correctText }.
+// questions: the section's questions (catalog order). attempts: normalized
+// attempt views { itemId, sessionId, status, selectedIndex } (oldest first).
+// sessionId: the run id, or null for no run. Returns
+// { correct, incorrect, total, percent }.
 export function buildSessionResult({ questions, attempts, sessionId }) {
   const byId = new Map(questions.map((q) => [q.id, q]));
   const latest = new Map();

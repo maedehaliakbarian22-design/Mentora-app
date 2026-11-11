@@ -1,22 +1,20 @@
-// Mentora app shell. Wires the pure navigation, progress and render modules to
-// the DOM. Learning State is never computed, stored or shown here.
+// Mentora app shell. Wires the pure navigation, practice service and render
+// modules to the DOM. Learning State is never computed, stored or shown here.
+// Attempt history lives in the Attempt Log (see domain/practice-service.js).
 
 import { CATALOG, indexCatalog } from './content/catalog.js';
 import { validateCatalog } from './content/validate.js';
-import {
-  createProgressStore, recordAnswer, appendAttempt, clearSection, setSelection, sectionAnswers,
-} from './progress/progress-store.js';
-import { createAttemptRecord, newSessionId } from './attempts/attempt-record.js';
+import { openPracticeService } from './domain/practice-service.js';
 import { createNavigator, ROUTES } from './core/navigation.js';
 import { registerBackButton } from './core/platform.js';
 import { evaluateAnswer } from './domain/evaluate.js';
-import { buildSessionResult, currentRunId } from './domain/session-results.js';
 import {
   newPracticeUi, selectOption, checkAnswer, requestAdvance,
 } from './domain/practice-flow.js';
+import { setSelection, sectionAnswers } from './progress/progress-store.js';
 import * as view from './ui/render.js';
 import * as tabViews from './ui/tab-views.js';
-import { TAB_ROOT_ROUTE, isTab, shouldShowTabBar, resolveBack } from './core/tabs.js';
+import { isTab, shouldShowTabBar, resolveBack } from './core/tabs.js';
 import { continueTarget, learnerStats, overallProgress } from './domain/learner-summary.js';
 
 const appEl = document.getElementById('app');
@@ -27,6 +25,19 @@ if (errors.length > 0) {
 } else {
   boot();
 }
+
+// Persian text for each notice code the practice service can report.
+const NOTICE_TEXT = {
+  'storage-unavailable': 'ذخیرهٔ پیشرفت در این مرورگر ممکن نیست.',
+  'progress-recovered': 'داده‌های ذخیره‌شدهٔ قبلی نامعتبر بود و بخشی از آن بازنشانی شد.',
+  'log-corrupt': 'تاریخچهٔ تلاش‌ها نامعتبر بود؛ نسخهٔ پشتیبان آن ذخیره شد.',
+  'log-unavailable': 'تاریخچهٔ تلاش‌ها در این مرورگر در دسترس نیست.',
+  'log-invalid': 'برخی رکوردهای تاریخچه نامعتبر بودند و نادیده گرفته شدند.',
+  'migration-incomplete': 'انتقال تاریخچهٔ قبلی کامل نشد؛ داده‌های قبلی حفظ شده‌اند.',
+  'unlogged-answers': 'بعضی پاسخ‌ها در تاریخچه ثبت نشده‌اند و در نتیجه نمایش داده نمی‌شوند.',
+  'save-failed': 'ذخیرهٔ پیشرفت در این لحظه انجام نشد.',
+};
+const LOG_WRITE_TEXT = 'ثبت این پاسخ در تاریخچه انجام نشد؛ دوباره تلاش کنید.';
 
 function memoryStorage() {
   const map = new Map();
@@ -50,21 +61,18 @@ function pickStorage() {
 function boot() {
   const index = indexCatalog(CATALOG);
   const { storage, usingMemory } = pickStorage();
-  const store = createProgressStore(storage, index);
-  const loaded = store.load();
+  const service = openPracticeService({ storage, index, catalogVersion: CATALOG.version });
 
-  let progress = loaded.progress;
+  let progress = service.progress();
+  // Structural notices (from loading and migration) stay until the app restarts.
+  const bootNotices = [];
+  if (usingMemory) bootNotices.push('ذخیرهٔ دائمی در این مرورگر فعال نیست؛ پیشرفت پس از بستن برنامه حفظ نمی‌شود.');
+  for (const code of service.notices()) {
+    if (NOTICE_TEXT[code]) bootNotices.push(NOTICE_TEXT[code]);
+  }
+  // Transient notices are shown once, on the next render.
   let pendingNotices = [];
-  if (usingMemory) {
-    pendingNotices.push('ذخیرهٔ دائمی در این مرورگر فعال نیست؛ پیشرفت پس از بستن برنامه حفظ نمی‌شود.');
-  } else if (!loaded.storageOk) {
-    pendingNotices.push('ذخیرهٔ پیشرفت در این مرورگر ممکن نیست.');
-  }
-  if (loaded.recovered) {
-    pendingNotices.push('داده‌های ذخیره‌شدهٔ قبلی نامعتبر بود و بخشی از آن بازنشانی شد.');
-  }
   let persistFailed = false;
-  if (loaded.recovered && loaded.storageOk) persistFailed = !store.save(progress);
 
   const tabbarEl = document.getElementById('tabbar');
   // Each tab keeps its own stack, so switching tabs never resets a screen.
@@ -98,9 +106,13 @@ function boot() {
   // selection is lost on restart by design.
   let practiceUi = null;
 
+  function syncProgress() {
+    progress = service.progress();
+  }
+
   function commit(next) {
-    progress = next;
-    persistFailed = !store.save(progress);
+    persistFailed = !service.setProgress(next);
+    syncProgress();
     render();
   }
 
@@ -146,8 +158,7 @@ function boot() {
 
   function uiFor(route) {
     const key = practiceKey(route);
-    // shownAt is the moment this question was first displayed. It is the start
-    // of the response time recorded on Check.
+    // shownAt is kept for the flow state only; response timing is not stored.
     if (!practiceUi || practiceUi.key !== key) practiceUi = { ...newPracticeUi(key), shownAt: Date.now() };
     return practiceUi;
   }
@@ -156,15 +167,6 @@ function boot() {
     const section = index.sections.get(route.sectionId);
     const question = section && section.questions[route.index];
     return Boolean(question) && sectionAnswers(progress, section.id)[question.id] !== undefined;
-  }
-
-  // The practice run this section's answers belong to, or null when none are recorded.
-  function runIdFor(section) {
-    return currentRunId({
-      questions: section.questions,
-      attempts: progress.attempts,
-      answers: sectionAnswers(progress, section.id),
-    });
   }
 
   function advancePractice() {
@@ -241,7 +243,7 @@ function boot() {
   }
 
   function profileVm() {
-    return { selectionLabel: selectionLabel(), stats: learnerStats(progress, index) };
+    return { selectionLabel: selectionLabel(), stats: learnerStats(service.statsInput(), index) };
   }
 
   function screenFor(route) {
@@ -296,14 +298,9 @@ function boot() {
         });
       }
       case ROUTES.RESULT: {
-        // The results of the practice run that owns this section's answers.
-        // A run is kept whole across an app restart.
+        // The current practice run of this section, from the service.
         const section = index.sections.get(route.sectionId);
-        const session = buildSessionResult({
-          questions: section.questions,
-          attempts: progress.attempts,
-          sessionId: runIdFor(section),
-        });
+        const session = service.result(section.id);
         return view.renderResult({
           section,
           session,
@@ -323,7 +320,8 @@ function boot() {
 
   function banners() {
     const items = [];
-    if (persistFailed) items.push('ذخیرهٔ پیشرفت در این لحظه انجام نشد.');
+    if (persistFailed) items.push(NOTICE_TEXT['save-failed']);
+    items.push(...bootNotices);
     items.push(...pendingNotices);
     pendingNotices = [];
     return view.renderBanners(items);
@@ -397,39 +395,40 @@ function boot() {
         return render();
       }
       case 'check': {
-        // The only transition that evaluates and persists. Once per question.
+        // The only transition that evaluates and records. Once per question.
         const route = nav.current();
         if (route.name !== ROUTES.PRACTICE) return undefined;
         const section = index.sections.get(route.sectionId);
         const question = section.questions[route.index];
         const ui = uiFor(route);
         const { ui: nextUi, outcome } = checkAnswer(ui, isAnsweredNow(route), question);
+        if (!outcome) {
+          practiceUi = nextUi;
+          return render();
+        }
+        // Record first. If the log write fails, nothing is shown as answered.
+        const res = service.check(section.id, question.id, outcome.selectedIndex);
+        if (!res.ok) {
+          if (res.reason === 'log-write') pendingNotices.push(LOG_WRITE_TEXT);
+          practiceUi = ui;
+          syncProgress();
+          return render();
+        }
         practiceUi = nextUi;
-        if (!outcome) return render();
-        // One raw attempt per Check, appended. The attempt carries the run id, so
-        // the run is recovered after a restart. The answer map is updated in the
-        // same commit, so it can always be rebuilt from attempts.
-        const runId = runIdFor(section) ?? newSessionId();
-        const attemptNumber = progress.attempts.filter((a) => a.itemId === question.id).length + 1;
-        const record = createAttemptRecord({
-          itemId: question.id,
-          attemptNumber,
-          status: 'attempted',
-          sessionId: runId,
-          selectedIndex: outcome.selectedIndex,
-          isCorrect: outcome.correct,
-          elapsedTimeMs: Math.max(0, Math.round(Date.now() - ui.shownAt)),
-        });
-        commit(appendAttempt(recordAnswer(progress, question.id, outcome.selectedIndex, index), record, index));
-        return undefined;
+        if (!res.saved) persistFailed = true;
+        syncProgress();
+        return render();
       }
       case 'continue':
         return tryAdvance();
-      case 'restart-section':
+      case 'restart-section': {
         practiceUi = null;
-        commit(clearSection(progress, ds.section));
+        const res = service.restartSection(ds.section);
+        if (res.ok && !res.saved) persistFailed = true;
+        syncProgress();
         nav.back();
         return render();
+      }
       default:
         return undefined;
     }

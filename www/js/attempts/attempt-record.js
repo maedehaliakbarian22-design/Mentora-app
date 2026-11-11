@@ -1,10 +1,11 @@
-// Raw attempt record: observable facts about one question attempt.
+// Raw attempt record: observable facts about one question attempt. Used for
+// validating legacy records and for the in-memory attempt shape. The
+// authoritative store is the Attempt Log (attempt-log.js).
 //
-// Adapted from feature/raw-attempt-record (src/attempts/attempt-record.js) into
-// this branch's ES module layout. Field rules are kept; two deliberate changes:
+// Field rules are kept from feature/raw-attempt-record. Two deliberate changes:
 //   - selectedIndex (option index) replaces selectedAnswer (string), because the
 //     app stores option indices, not answer text.
-//   - sessionId is required, so attempts can be grouped by app session.
+//   - sessionId is required. It identifies one practice run (SPEC v3 §13.9).
 //
 // Records facts only. It does not decide whether an attempt counts as learning
 // evidence and does not compute Learning State. Unknown values stay null.
@@ -24,7 +25,7 @@
 // - hintLevel 0 means "no hint shown"; null means "not recorded". Kept distinct.
 // - HINT_LEVEL_MAX = 4 is a provisional ladder size (no hints in the MVP yet).
 // - Unknown fields are rejected rather than silently dropped.
-// - Records are frozen. The store appends them and never rewrites them.
+// - Records are frozen.
 
 export const ATTEMPT_STATUS = Object.freeze({
   ATTEMPTED: 'attempted',
@@ -106,7 +107,7 @@ export function createAttemptRecord(input) {
   });
 }
 
-// Session identity for one app launch. Uses crypto.randomUUID when available.
+// A new id for one practice run or one attempt. Not tied to app launches.
 export function newSessionId(cryptoApi = globalThis.crypto) {
   if (cryptoApi && typeof cryptoApi.randomUUID === 'function') return cryptoApi.randomUUID();
   return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;

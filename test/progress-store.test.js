@@ -42,10 +42,11 @@ test('recordAnswer rejects unknown questions and out-of-range choices', () => {
   assert.throws(() => recordAnswer(defaultProgress(), 'demo-q1', 7, idx), RangeError);
 });
 
-test('clearSection removes only that section', () => {
+test('clearSection empties the section and closes its active run', () => {
   let p = recordAnswer(defaultProgress(), 'demo-q1', 0, idx);
+  p = { ...p, sections: { ...p.sections, 'chapter-1-section-1': { ...p.sections['chapter-1-section-1'], runId: 'R1' } } };
   p = clearSection(p, 'chapter-1-section-1');
-  assert.deepEqual(p.sections, {});
+  assert.deepEqual(p.sections['chapter-1-section-1'], { answers: {}, runId: null, closedRunIds: ['R1'] });
 });
 
 test('selection is kept only when it names an available field', () => {
@@ -74,6 +75,16 @@ test('stored answers for unknown or out-of-range entries are dropped and reporte
   assert.deepEqual(sectionAnswers(r.progress, 'chapter-1-section-1'), { 'demo-q2': 2 });
   assert.equal(r.progress.sections['removed-section'], undefined);
   assert.equal(r.recovered, true);
+});
+
+test('run identity fields survive a round trip', () => {
+  const raw = {
+    version: PROGRESS_VERSION, selection: null,
+    sections: { 'chapter-1-section-1': { answers: { 'demo-q1': 1 }, runId: 'R9', closedRunIds: ['R1'] } },
+  };
+  const r = sanitizeProgress(raw, idx);
+  assert.equal(r.progress.sections['chapter-1-section-1'].runId, 'R9');
+  assert.deepEqual(r.progress.sections['chapter-1-section-1'].closedRunIds, ['R1']);
 });
 
 test('store round-trips and survives unparsable or unavailable storage', () => {
