@@ -1,0 +1,32 @@
+From 0927912f1f9fa77acaa58e3a99659d8371fc0bee Mon Sep 17 00:00:00 2001
+From: "Kimia (via Claude)" <maedeh.aliakbarian22@gmail.com>
+Date: Fri, 13 Nov 2026 20:16:36 +0000
+Subject: [PATCH] fix: update notice texts for unlogged, log-corrupt and
+ log-invalid (stage 1)
+
+---
+ www/js/app.js | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/www/js/app.js b/www/js/app.js
+index ea66427..0f15789 100644
+--- a/www/js/app.js
++++ b/www/js/app.js
+@@ -30,11 +30,11 @@ if (errors.length > 0) {
+ const NOTICE_TEXT = {
+   'storage-unavailable': 'ذخیرهٔ پیشرفت در این مرورگر ممکن نیست.',
+   'progress-recovered': 'داده‌های ذخیره‌شدهٔ قبلی نامعتبر بود و بخشی از آن بازنشانی شد.',
+-  'log-corrupt': 'تاریخچهٔ تلاش‌ها نامعتبر بود؛ نسخهٔ پشتیبان آن ذخیره شد.',
++  'log-corrupt': 'تاریخچه تلاش‌ها نامعتبر بود. نسخه پشتیبان پس از ثبت اولین پاسخ جدید ساخته می‌شود.',
+   'log-unavailable': 'تاریخچهٔ تلاش‌ها در این مرورگر در دسترس نیست.',
+-  'log-invalid': 'برخی رکوردهای تاریخچه نامعتبر بودند و نادیده گرفته شدند.',
++  'log-invalid': 'برخی رکوردهای تاریخچه نامعتبر بودند و در آمار نادیده گرفته شدند. پاسخ‌های ذخیره‌شده همان سؤال‌ها هنوز در تمرین دیده می‌شوند.',
+   'migration-incomplete': 'انتقال تاریخچهٔ قبلی کامل نشد؛ داده‌های قبلی حفظ شده‌اند.',
+-  'unlogged-answers': 'بعضی پاسخ‌ها در تاریخچه ثبت نشده‌اند و در نتیجه نمایش داده نمی‌شوند.',
++  'unlogged-answers': 'بعضی پاسخ‌های این دور در تاریخچه ثبت نشده‌اند. در تمرین دیده می‌شوند، اما در نتیجه و آمار عملکرد شمرده نمی‌شوند.',
+   'save-failed': 'ذخیرهٔ پیشرفت در این لحظه انجام نشد.',
+ };
+ const LOG_WRITE_TEXT = 'ثبت این پاسخ در تاریخچه انجام نشد؛ دوباره تلاش کنید.';
+-- 
+2.43.0
+
