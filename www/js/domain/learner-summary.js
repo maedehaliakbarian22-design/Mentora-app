@@ -56,15 +56,46 @@ export function continueTarget(progress, index) {
   return null;
 }
 
+// Count cached answers separately from answers represented in the valid,
+// non-closed attempt history. The cache remains the source for total answered;
+// the attempt history remains the source for attempts and accuracy.
+function answerRecordingCounts(progress, index) {
+  const attempts = Array.isArray(progress.attempts) ? progress.attempts : [];
+  const loggedBySection = new Map();
+
+  for (const attempt of attempts) {
+    if (!attempt || attempt.status !== 'attempted' || !attempt.sectionId || !attempt.questionId) continue;
+    const state = progress.sections && progress.sections[attempt.sectionId];
+    const closed = state && Array.isArray(state.closedRunIds) ? state.closedRunIds : [];
+    if (closed.includes(attempt.sessionId)) continue;
+    if (!loggedBySection.has(attempt.sectionId)) loggedBySection.set(attempt.sectionId, new Set());
+    loggedBySection.get(attempt.sectionId).add(attempt.questionId);
+  }
+
+  let loggedAnswered = 0;
+  let unloggedAnswered = 0;
+  for (const { section } of scopeSections(index, progress.selection)) {
+    const answers = sectionAnswers(progress, section.id);
+    const logged = loggedBySection.get(section.id) || new Set();
+    for (const questionId of Object.keys(answers)) {
+      if (logged.has(questionId)) loggedAnswered += 1;
+      else unloggedAnswered += 1;
+    }
+  }
+  return { loggedAnswered, unloggedAnswered };
+}
+
 // accuracyPercent is null when no attempt has been recorded yet.
 export function learnerStats(progress, index) {
   const attempted = progress.attempts.filter((a) => a.status === 'attempted');
   const correct = attempted.filter((a) => a.isCorrect === true).length;
+  const recording = answerRecordingCounts(progress, index);
   return {
     attempts: progress.attempts.length,
     correct,
     accuracyPercent: attempted.length === 0 ? null : percentOf(correct, attempted.length),
     sessions: new Set(progress.attempts.map((a) => a.sessionId)).size,
     ...overallProgress(progress, index),
+    ...recording,
   };
 }
