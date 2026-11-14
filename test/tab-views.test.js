@@ -43,3 +43,17 @@ test('Profile shows Persian digits only, and 13 percent progress for 1 of 8', ()
   assert.ok(html.includes('۱۰۰٪'));
   assert.equal(/[0-9]/.test(visibleText(html)), false);
 });
+
+test('Profile shows the unlogged row only when its count is positive', () => {
+  const base = {
+    answered: 2, total: 8, percent: 25, attempts: 1, correct: 1,
+    accuracyPercent: 100, sessions: 1, loggedAnswered: 1, unloggedAnswered: 1,
+  };
+  const withUnlogged = renderProfile({ selectionLabel: 'x', stats: base });
+  assert.ok(withUnlogged.includes('پاسخ‌های ثبت‌نشده'));
+  assert.ok(withUnlogged.includes('۱'));
+  const withoutUnlogged = renderProfile({
+    selectionLabel: 'x', stats: { ...base, loggedAnswered: 2, unloggedAnswered: 0 },
+  });
+  assert.equal(withoutUnlogged.includes('پاسخ‌های ثبت‌نشده'), false);
+});
