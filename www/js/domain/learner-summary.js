@@ -77,8 +77,9 @@ function answerRecordingCounts(progress, index) {
   for (const { section } of scopeSections(index, progress.selection)) {
     const answers = sectionAnswers(progress, section.id);
     const logged = loggedBySection.get(section.id) || new Set();
-    for (const questionId of Object.keys(answers)) {
-      if (logged.has(questionId)) loggedAnswered += 1;
+    for (const question of section.questions) {
+      if (answers[question.id] === undefined) continue;
+      if (logged.has(question.id)) loggedAnswered += 1;
       else unloggedAnswered += 1;
     }
   }
