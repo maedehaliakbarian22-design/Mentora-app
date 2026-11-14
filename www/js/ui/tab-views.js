@@ -99,7 +99,7 @@ export function renderProfile(vm) {
         <div class="mv-card"><dt class="mv-meta">کل پاسخ‌های انجام‌شده</dt>
           <dd class="mv-big">${esc(toFa(s.answered))} از ${esc(toFa(s.total))}</dd></div>
         <div class="mv-card"><dt class="mv-meta">پاسخ‌های ثبت‌شده</dt>
-          <dd class="mv-big">${esc(toFa(s.loggedAnswered))}</dd></div>
+          <dd class="mv-big">${esc(toFa((s.loggedAnswered ?? 0)))}</dd></div>
         ${unloggedRow}
         <div class="mv-card"><dt class="mv-meta">تعداد تلاش‌های ثبت‌شده</dt>
           <dd class="mv-big">${esc(toFa(s.attempts))}</dd></div>
