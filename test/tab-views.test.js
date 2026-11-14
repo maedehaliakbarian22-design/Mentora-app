@@ -4,6 +4,11 @@ import { renderHome, renderProfile } from '../www/js/ui/tab-views.js';
 
 // Visible text only: tags (and their attributes, such as the bar width) removed.
 const visibleText = (html) => html.replace(/<[^>]*>/g, ' ');
+const visibleCount = (html, label) => {
+  const row = html.split(label)[1];
+  const match = row && row.match(/<dd class="mv-big">([^<]+)<\/dd>/);
+  return match ? match[1] : null;
+};
 
 const NONE = { answered: 0, total: 0, percent: null };
 
@@ -44,16 +49,47 @@ test('Profile shows Persian digits only, and 13 percent progress for 1 of 8', ()
   assert.equal(/[0-9]/.test(visibleText(html)), false);
 });
 
-test('Profile shows the unlogged row only when its count is positive', () => {
+test('Profile shows exact logged and unlogged counts', () => {
   const base = {
-    answered: 2, total: 8, percent: 25, attempts: 1, correct: 1,
-    accuracyPercent: 100, sessions: 1, loggedAnswered: 1, unloggedAnswered: 1,
+    answered: 12, total: 18, percent: 67, attempts: 4, correct: 3,
+    accuracyPercent: 75, sessions: 2, loggedAnswered: 9, unloggedAnswered: 3,
   };
-  const withUnlogged = renderProfile({ selectionLabel: 'x', stats: base });
-  assert.ok(withUnlogged.includes('پاسخ‌های ثبت‌نشده'));
-  assert.ok(withUnlogged.includes('۱'));
-  const withoutUnlogged = renderProfile({
-    selectionLabel: 'x', stats: { ...base, loggedAnswered: 2, unloggedAnswered: 0 },
+  const html = renderProfile({ selectionLabel: 'x', stats: base });
+  assert.equal(visibleCount(html, 'پاسخ‌های دارای سابقه'), '۹');
+  assert.equal(visibleCount(html, 'پاسخ‌های ثبت‌نشده'), '۳');
+});
+
+test('Profile hides both recording rows for legacy stats without recording counts', () => {
+  const html = renderProfile({
+    selectionLabel: 'x',
+    stats: {
+      answered: 2, total: 8, percent: 25, attempts: 1, correct: 1,
+      accuracyPercent: 100, sessions: 1,
+    },
   });
-  assert.equal(withoutUnlogged.includes('پاسخ‌های ثبت‌نشده'), false);
+  assert.equal(html.includes('پاسخ‌های دارای سابقه'), false);
+  assert.equal(html.includes('پاسخ‌های ثبت‌نشده'), false);
+});
+
+test('Profile hides the unlogged row when its count is zero', () => {
+  const html = renderProfile({
+    selectionLabel: 'x',
+    stats: {
+      answered: 2, total: 8, percent: 25, attempts: 2, correct: 2,
+      accuracyPercent: 100, sessions: 1, loggedAnswered: 2, unloggedAnswered: 0,
+    },
+  });
+  assert.equal(html.includes('پاسخ‌های دارای سابقه'), true);
+  assert.equal(html.includes('پاسخ‌های ثبت‌نشده'), false);
+});
+
+test('Profile with zero of zero hides the unlogged row', () => {
+  const html = renderProfile({
+    selectionLabel: 'x',
+    stats: {
+      ...NONE, attempts: 0, correct: 0, accuracyPercent: null, sessions: 0,
+      loggedAnswered: 0, unloggedAnswered: 0,
+    },
+  });
+  assert.equal(html.includes('پاسخ‌های ثبت‌نشده'), false);
 });
