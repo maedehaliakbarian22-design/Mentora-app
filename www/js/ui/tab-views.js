@@ -80,20 +80,27 @@ export function renderHome(vm) {
     </section>`;
 }
 
-// vm: { selectionLabel, stats: {answered,total,percent,attempts,correct,accuracyPercent,sessions} }
+// vm: { selectionLabel, stats: {answered,total,percent,loggedAnswered,unloggedAnswered,attempts,correct,accuracyPercent,sessions} }
 export function renderProfile(vm) {
   const s = vm.stats;
   const accuracy = s.accuracyPercent === null
     ? '<span class="mv-meta">هنوز پاسخی ثبت نشده است</span>'
     : `<span class="mv-big">${esc(toFa(s.accuracyPercent))}٪</span>`;
+  const unloggedRow = s.unloggedAnswered > 0
+    ? `<div class="mv-card"><dt class="mv-meta">پاسخ‌های ثبت‌نشده</dt>
+          <dd class="mv-big">${esc(toFa(s.unloggedAnswered))}</dd></div>`
+    : '';
   return `<header class="mv-hero">
       <p class="mv-kicker">${esc(vm.selectionLabel)}</p>
       <h1 id="title" tabindex="-1" class="mv-title">پروفایل</h1>
     </header>
     <section class="mv-section"><h2>آمار یادگیری</h2>
       <dl class="mv-stats">
-        <div class="mv-card"><dt class="mv-meta">پاسخ‌های پاسخ‌داده‌شده</dt>
+        <div class="mv-card"><dt class="mv-meta">کل پاسخ‌های انجام‌شده</dt>
           <dd class="mv-big">${esc(toFa(s.answered))} از ${esc(toFa(s.total))}</dd></div>
+        <div class="mv-card"><dt class="mv-meta">پاسخ‌های ثبت‌شده</dt>
+          <dd class="mv-big">${esc(toFa(s.loggedAnswered))}</dd></div>
+        ${unloggedRow}
         <div class="mv-card"><dt class="mv-meta">تعداد تلاش‌های ثبت‌شده</dt>
           <dd class="mv-big">${esc(toFa(s.attempts))}</dd></div>
         <div class="mv-card"><dt class="mv-meta">دقت پاسخ‌ها</dt>
