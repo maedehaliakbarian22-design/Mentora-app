@@ -20,13 +20,6 @@ import { continueTarget, learnerStats, overallProgress } from './domain/learner-
 const appEl = document.getElementById('app');
 const errors = validateCatalog(CATALOG);
 
-if (errors.length > 0) {
-  appEl.innerHTML = view.renderCatalogError(errors);
-} else {
-  boot();
-}
-
-
 // Persian text for each notice code the practice service can report.
 const NOTICE_TEXT = {
   'storage-unavailable': 'ذخیرهٔ پیشرفت در این مرورگر ممکن نیست.',
@@ -39,6 +32,13 @@ const NOTICE_TEXT = {
   'save-failed': 'ذخیرهٔ پیشرفت در این لحظه انجام نشد.',
 };
 const LOG_WRITE_TEXT = 'ثبت این پاسخ در تاریخچه انجام نشد؛ دوباره تلاش کنید.';
+
+if (errors.length > 0) {
+  appEl.innerHTML = view.renderCatalogError(errors);
+} else {
+  boot();
+}
+
 
 
 function memoryStorage() {
