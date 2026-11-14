@@ -86,7 +86,12 @@ export function renderProfile(vm) {
   const accuracy = s.accuracyPercent === null
     ? '<span class="mv-meta">هنوز پاسخی ثبت نشده است</span>'
     : `<span class="mv-big">${esc(toFa(s.accuracyPercent))}٪</span>`;
-  const unloggedRow = s.unloggedAnswered > 0
+  const hasRecordingCounts = s.loggedAnswered !== undefined && s.loggedAnswered !== null;
+  const loggedRow = hasRecordingCounts
+    ? `<div class="mv-card"><dt class="mv-meta">پاسخ‌های دارای سابقه</dt>
+          <dd class="mv-big">${esc(toFa(s.loggedAnswered))}</dd></div>`
+    : '';
+  const unloggedRow = hasRecordingCounts && s.unloggedAnswered > 0
     ? `<div class="mv-card"><dt class="mv-meta">پاسخ‌های ثبت‌نشده</dt>
           <dd class="mv-big">${esc(toFa(s.unloggedAnswered))}</dd></div>`
     : '';
@@ -96,10 +101,9 @@ export function renderProfile(vm) {
     </header>
     <section class="mv-section"><h2>آمار یادگیری</h2>
       <dl class="mv-stats">
-        <div class="mv-card"><dt class="mv-meta">کل پاسخ‌های انجام‌شده</dt>
+        <div class="mv-card"><dt class="mv-meta">کل پاسخ‌های داده‌شده</dt>
           <dd class="mv-big">${esc(toFa(s.answered))} از ${esc(toFa(s.total))}</dd></div>
-        <div class="mv-card"><dt class="mv-meta">پاسخ‌های ثبت‌شده</dt>
-          <dd class="mv-big">${esc(toFa((s.loggedAnswered ?? 0)))}</dd></div>
+        ${loggedRow}
         ${unloggedRow}
         <div class="mv-card"><dt class="mv-meta">تعداد تلاش‌های ثبت‌شده</dt>
           <dd class="mv-big">${esc(toFa(s.attempts))}</dd></div>
