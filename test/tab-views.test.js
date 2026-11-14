@@ -11,6 +11,11 @@ const visibleCount = (html, label) => {
 };
 
 const NONE = { answered: 0, total: 0, percent: null };
+const RECORDING_LABELS = [
+  'کل پاسخ‌های داده‌شده',
+  'پاسخ‌های دارای سابقه',
+  'پاسخ‌های ثبت‌نشده',
+];
 
 test('Home with no questions shows a message, never 0 percent', () => {
   const html = renderHome({ selectionLabel: 'x', overall: NONE, target: null });
@@ -57,6 +62,38 @@ test('Profile shows exact logged and unlogged counts', () => {
   const html = renderProfile({ selectionLabel: 'x', stats: base });
   assert.equal(visibleCount(html, 'پاسخ‌های دارای سابقه'), '۹');
   assert.equal(visibleCount(html, 'پاسخ‌های ثبت‌نشده'), '۳');
+});
+
+test('Profile: all three recording rows use Persian digits only', () => {
+  const html = renderProfile({
+    selectionLabel: 'x',
+    stats: {
+      answered: 12, total: 18, percent: 67, attempts: 4, correct: 3,
+      accuracyPercent: 75, sessions: 2, loggedAnswered: 9, unloggedAnswered: 3,
+    },
+  });
+  assert.equal(visibleCount(html, RECORDING_LABELS[0]), '۱۲ از ۱۸');
+  assert.equal(visibleCount(html, RECORDING_LABELS[1]), '۹');
+  assert.equal(visibleCount(html, RECORDING_LABELS[2]), '۳');
+  for (const label of RECORDING_LABELS) {
+    const afterLabel = html.split(label)[1];
+    assert.ok(afterLabel, `Missing recording row: ${label}`);
+    const row = afterLabel.split('</div>')[0];
+    assert.equal(/[0-9]/.test(visibleText(row)), false, `Latin digit in row: ${label}`);
+  }
+});
+
+test('Profile: zero logged count renders Persian zero and hides the unlogged row', () => {
+  const html = renderProfile({
+    selectionLabel: 'x',
+    stats: {
+      answered: 0, total: 18, percent: null, attempts: 0, correct: 0,
+      accuracyPercent: null, sessions: 0, loggedAnswered: 0, unloggedAnswered: 0,
+    },
+  });
+  assert.equal(visibleCount(html, RECORDING_LABELS[1]), '۰');
+  assert.equal(html.includes(RECORDING_LABELS[2]), false);
+  assert.equal(/[0-9]/.test(visibleText(html)), false);
 });
 
 test('Profile hides both recording rows for legacy stats without recording counts', () => {
