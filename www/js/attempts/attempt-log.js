@@ -13,6 +13,7 @@
 // - Unparsable or wrong-shape text is copied to a backup key, verified, before
 //   a fresh log replaces it.
 // - Correctness is recomputed from catalog content on every validation.
+// - Writes are refused until a successful load() has completed (load-guard).
 
 export const ATTEMPT_LOG_KEY = 'mentora.attempts.v1';
 export const ATTEMPT_LOG_SCHEMA = 1;
@@ -81,9 +82,11 @@ export function toLocalIso(date) {
   const offset = -date.getTimezoneOffset();
   const sign = offset >= 0 ? '+' : '-';
   const abs = Math.abs(offset);
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-    + `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-    + `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+  return (
+    date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+    'T' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds()) +
+    sign + pad(Math.floor(abs / 60)) + ':' + pad(abs % 60)
+  );
 }
 
 // Parses stored log text. Returns the status, the raw entries (kept verbatim),
@@ -116,14 +119,15 @@ export function parseLogText(text, index) {
 }
 
 function freeKey(storage, prefix) {
-  const base = `${prefix}${Date.now()}`;
+  const base = prefix + Date.now();
   let key = base;
-  for (let n = 1; storage.getItem(key) !== null; n += 1) key = `${base}.${n}`;
+  for (let n = 1; storage.getItem(key) !== null; n += 1) key = base + '.' + n;
   return key;
 }
 
 export function createAttemptLog(storage, index) {
   let state = { status: 'empty', rawRecords: [], records: [], invalid: 0, originalText: null };
+  let loaded = false;
 
   function snapshot() {
     return { status: state.status, records: state.records, invalid: state.invalid };
@@ -132,6 +136,8 @@ export function createAttemptLog(storage, index) {
   // Adds validated records in one verified write. `skipDuplicates` is used for
   // migration, which may run more than once. Without it, a duplicate id fails.
   function commit(incoming, skipDuplicates) {
+    if (!loaded) return fail('not-loaded');
+
     const corrupt = state.status === 'corrupt';
     const existing = new Set(corrupt ? [] : state.records.map((r) => r.attemptId));
     const fresh = [];
@@ -174,10 +180,13 @@ export function createAttemptLog(storage, index) {
       try {
         text = storage.getItem(ATTEMPT_LOG_KEY);
       } catch {
+        loaded = false;
         state = { status: 'unavailable', rawRecords: [], records: [], invalid: 0, originalText: null };
         return snapshot();
       }
       state = { ...parseLogText(text, index), originalText: text };
+      // Only mark loaded after a successful read path (empty / ok / corrupt are all "read succeeded")
+      loaded = true;
       return snapshot();
     },
     status: () => state.status,
