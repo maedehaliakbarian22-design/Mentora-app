@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAttemptLog, ATTEMPT_LOG_SCHEMA } from '../../www/js/attempts/attempt-log.js';
+import { createAttemptLog, ATTEMPT_LOG_SCHEMA } from '../www/js/attempts/attempt-log.js';
 
 function makeIndex() {
   return {

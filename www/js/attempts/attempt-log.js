@@ -82,9 +82,11 @@ export function toLocalIso(date) {
   const offset = -date.getTimezoneOffset();
   const sign = offset >= 0 ? '+' : '-';
   const abs = Math.abs(offset);
-  return `\( {date.getFullYear()}- \){pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-    + `T\( {pad(date.getHours())}: \){pad(date.getMinutes())}:${pad(date.getSeconds())}`
-    + `\( {sign} \){pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+  return (
+    date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+    'T' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds()) +
+    sign + pad(Math.floor(abs / 60)) + ':' + pad(abs % 60)
+  );
 }
 
 // Parses stored log text. Returns the status, the raw entries (kept verbatim),
@@ -117,9 +119,9 @@ export function parseLogText(text, index) {
 }
 
 function freeKey(storage, prefix) {
-  const base = `\( {prefix} \){Date.now()}`;
+  const base = prefix + Date.now();
   let key = base;
-  for (let n = 1; storage.getItem(key) !== null; n += 1) key = `\( {base}. \){n}`;
+  for (let n = 1; storage.getItem(key) !== null; n += 1) key = base + '.' + n;
   return key;
 }
 
