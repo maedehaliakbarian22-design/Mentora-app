@@ -2,9 +2,9 @@
    safe-area support. Colours follow the app's primary green (#1b6e5a). */
 
 :root {
-  --mv-tab-active: #1b6e5a;
-  --mv-tab-idle: #7b8794;
-  --mv-tab-line: #e3e9e8;
+  --mv-tab-active: #178f4a;
+  --mv-tab-idle: #6b7280;
+  --mv-tab-line: #e5e7eb;
   --mv-tab-height: 68px;
 }
 
@@ -54,6 +54,7 @@
 .mv-tab.is-active {
   color: var(--mv-tab-active);
   font-weight: 700;
+  background: #e7f8ee;
 }
 
 .mv-tab:focus-visible {
