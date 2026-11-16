@@ -166,7 +166,7 @@ export function renderPractice(vm) {
       ${vm.isLast ? 'مشاهدهٔ نتیجه' : 'سؤال بعدی'}</button>`
     : `<button type="button" class="mv-primary" data-action="check" ${chosen === null ? 'disabled' : ''}>بررسی پاسخ</button>`;
 
-  return `${renderTopBar({ title: vm.section.title, backLabel: 'بازگشت به بخش' })}
+  return `${renderTopBar({ title: vm.section.title, backLabel: '' })}
     <div class="mv-progress" aria-hidden="true"><span style="width:${progress}%"></span></div>
     <p class="mv-meta">سؤال ${esc(toFa(vm.index + 1))} از ${esc(toFa(vm.total))} ${demoBadge()}</p>
     <h2 class="mv-prompt" id="title" tabindex="-1">${esc(toFa(vm.question.prompt))}</h2>
