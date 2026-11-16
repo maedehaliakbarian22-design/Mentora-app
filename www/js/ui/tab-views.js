@@ -85,6 +85,9 @@ export function renderHome(vm) {
   return `<header class="mv-hero">
       <p class="mv-kicker">${esc(vm.selectionLabel)}</p>
       <h1 id="title" tabindex="-1" class="mv-title">خانه</h1>
+      <span class="mv-counter" aria-label="تعداد سوال‌های پاسخ داده شده">
+        ${esc(toFa(vm.overall.answered))} از ${esc(toFa(vm.overall.total))} سوال پاسخ داده شده
+      </span>
     </header>
     ${continueBlock}
     ${streakBlock(vm.streak)}
@@ -99,7 +102,21 @@ export function renderHome(vm) {
     </section>`;
 }
 
-// vm: { selectionLabel, stats: {answered,total,percent,attempts,correct,accuracyPercent,sessions} }
+// Moon while the app is light (tap for dark), sun while it is dark.
+function themeToggle(theme) {
+  const isDark = theme === 'dark';
+  const icon = isDark
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>'
+    : '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
+  const label = isDark ? 'حالت روشن' : 'حالت تاریک';
+  return `<section class="mv-section"><h2>ظاهر</h2>
+      <button type="button" class="mv-theme" data-action="toggle-theme" aria-label="${esc(label)}">
+        <span>${esc(label)}</span>
+        <span class="mv-theme__icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false">${icon}</svg></span>
+      </button></section>`;
+}
+
+// vm: { selectionLabel, theme: 'light'|'dark', stats: {answered,total,percent,attempts,correct,accuracyPercent,sessions} }
 export function renderProfile(vm) {
   const s = vm.stats;
   const accuracy = s.accuracyPercent === null
@@ -108,6 +125,9 @@ export function renderProfile(vm) {
   return `<header class="mv-hero">
       <p class="mv-kicker">${esc(vm.selectionLabel)}</p>
       <h1 id="title" tabindex="-1" class="mv-title">پروفایل</h1>
+      <span class="mv-counter" aria-label="تعداد سوال‌های پاسخ داده شده">
+        ${esc(toFa(s.answered))} از ${esc(toFa(s.total))} سوال پاسخ داده شده
+      </span>
     </header>
     <section class="mv-section"><h2>امتیاز و پیشرفت</h2>
       <dl class="mv-stats">
@@ -134,6 +154,7 @@ export function renderProfile(vm) {
       <p class="mv-meta">${percentSentence(s.percent, 'تمرین‌های')}</p>
       <div class="mv-progress" aria-hidden="true"><span style="width:${s.percent ?? 0}%"></span></div>
     </section>
+    ${themeToggle(vm.theme)}
     <section class="mv-section"><h2>تنظیمات</h2>
       <button type="button" class="mv-secondary" data-action="change-selection">تغییر پایه یا رشته</button>
     </section>`;
