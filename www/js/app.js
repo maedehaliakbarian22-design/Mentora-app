@@ -40,6 +40,8 @@ const NOTICE_TEXT = {
 };
 const LOG_WRITE_TEXT = 'ثبت این پاسخ در تاریخچه انجام نشد؛ دوباره تلاش کنید.';
 
+const THEME_KEY = 'mentora-theme';
+
 function memoryStorage() {
   const map = new Map();
   return {
@@ -59,10 +61,37 @@ function pickStorage() {
   }
 }
 
+// Light or dark, from the learner's saved choice, else from the device.
+function systemTheme() {
+  try {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+function currentTheme() {
+  const set = document.documentElement.dataset.theme;
+  return set === 'dark' || set === 'light' ? set : systemTheme();
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+}
+
 function boot() {
   const index = indexCatalog(CATALOG);
   const { storage, usingMemory } = pickStorage();
   const service = openPracticeService({ storage, index, catalogVersion: CATALOG.version });
+
+  // Restore the saved theme before the first paint. A blocked storage just
+  // means the device setting is used.
+  try {
+    const saved = storage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') applyTheme(saved);
+  } catch {
+    // Ignore: fall back to the device setting.
+  }
 
   let progress = service.progress();
   // Structural notices (from loading and migration) stay until the app restarts.
@@ -255,6 +284,7 @@ function boot() {
       selectionLabel: selectionLabel(),
       stats: learnerStats(service.statsInput(), index),
       streak: streakNow(),
+      theme: currentTheme(),
     };
   }
 
@@ -359,6 +389,17 @@ function boot() {
 
   // ----- actions ---------------------------------------------------------------
 
+  function toggleTheme() {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try {
+      storage.setItem(THEME_KEY, next);
+    } catch {
+      // The theme still changes for this session; it just is not remembered.
+    }
+    return render();
+  }
+
   function handle(action, ds) {
     switch (action) {
       case 'back':
@@ -375,6 +416,8 @@ function boot() {
         return commit(setSelection(progress, { gradeId: ds.grade, fieldId: ds.field }));
       case 'switch-tab':
         return switchTab(ds.tab);
+      case 'toggle-theme':
+        return toggleTheme();
       case 'change-selection':
         nav.push({ name: ROUTES.SELECTION, gradeId: progress.selection ? progress.selection.gradeId : undefined });
         return render();
