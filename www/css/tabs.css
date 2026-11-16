@@ -1,10 +1,7 @@
 /* Bottom navigation (Home / Learn / Profile). RTL, fixed to the bottom, with
-   safe-area support. Colours follow the app's primary green (#1b6e5a). */
+   safe-area support. Colours come from the theme tokens in mvp.css. */
 
 :root {
-  --mv-tab-active: #178f4a;
-  --mv-tab-idle: #6b7280;
-  --mv-tab-line: #e5e7eb;
   --mv-tab-height: 68px;
 }
 
@@ -15,9 +12,9 @@
   bottom: 0;
   z-index: 50;
   direction: rtl;
-  background: #ffffff;
-  border-top: 1px solid var(--mv-tab-line);
-  box-shadow: 0 -4px 14px rgba(16, 24, 40, 0.06);
+  background: var(--mv-surface);
+  border-top: 1px solid var(--mv-line);
+  box-shadow: 0 -4px 14px rgba(16, 24, 40, 0.08);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -44,7 +41,7 @@
   border: 0;
   border-radius: 14px;
   background: none;
-  color: var(--mv-tab-idle);
+  color: var(--mv-muted);
   font: inherit;
   font-size: 0.8rem;
   cursor: pointer;
@@ -52,13 +49,13 @@
 }
 
 .mv-tab.is-active {
-  color: var(--mv-tab-active);
-  font-weight: 700;
-  background: #e7f8ee;
+  color: var(--mv-brand-text);
+  font-weight: 800;
+  background: var(--mv-brand-soft);
 }
 
 .mv-tab:focus-visible {
-  outline: 3px solid #2456c8;
+  outline: 3px solid var(--mv-accent-dark);
   outline-offset: -3px;
 }
 
