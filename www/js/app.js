@@ -16,6 +16,7 @@ import * as view from './ui/render.js';
 import * as tabViews from './ui/tab-views.js';
 import { isTab, shouldShowTabBar, resolveBack } from './core/tabs.js';
 import { continueTarget, learnerStats, overallProgress } from './domain/learner-summary.js';
+import { computeStreak, dayKey, studyDaysFromAwards } from './domain/streak.js';
 
 const appEl = document.getElementById('app');
 const errors = validateCatalog(CATALOG);
@@ -234,16 +235,27 @@ function boot() {
     return { selectionLabel: selectionLabel(), subjects };
   }
 
+  // Study streak from proven section completions, counted in Asia/Tehran.
+  function streakNow() {
+    const days = studyDaysFromAwards(progress.awards);
+    return computeStreak(days, dayKey(new Date()));
+  }
+
   function homeVm() {
     return {
       selectionLabel: selectionLabel(),
       overall: overallProgress(progress, index),
       target: continueTarget(progress, index),
+      streak: streakNow(),
     };
   }
 
   function profileVm() {
-    return { selectionLabel: selectionLabel(), stats: learnerStats(service.statsInput(), index) };
+    return {
+      selectionLabel: selectionLabel(),
+      stats: learnerStats(service.statsInput(), index),
+      streak: streakNow(),
+    };
   }
 
   function screenFor(route) {

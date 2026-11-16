@@ -45,6 +45,24 @@ function percentSentence(percent, scopeWord) {
   return `${esc(toFa(percent))}٪ از ${scopeWord} این انتخاب پاسخ داده شده`;
 }
 
+// vm.streak: { current, guardDays } from domain/streak.js, or undefined.
+// Missing streak renders nothing, so older view models keep working.
+export function streakBlock(streak) {
+  if (!streak) return '';
+  const guards = streak.guardDays.length;
+  const guardNote = guards > 0
+    ? `<p class="mv-meta">${esc(toFa(guards))} روز محافظ برای حفظ روزهای مطالعه استفاده شد.</p>`
+    : '';
+  const hint = streak.current === 0
+    ? '<p class="mv-note">با کامل کردن یک بخش امروز، روز مطالعه‌ات شروع می‌شود.</p>'
+    : '';
+  return `<section class="mv-section"><h2>روزهای مطالعه</h2>
+      <div class="mv-card">
+        <p class="mv-big">${esc(toFa(streak.current))} روز</p>
+        ${guardNote}${hint}
+      </div></section>`;
+}
+
 // vm: { selectionLabel, overall: {answered,total,percent}, target: {...}|null }
 export function renderHome(vm) {
   let continueBlock;
@@ -69,6 +87,7 @@ export function renderHome(vm) {
       <h1 id="title" tabindex="-1" class="mv-title">خانه</h1>
     </header>
     ${continueBlock}
+    ${streakBlock(vm.streak)}
     <section class="mv-section"><h2>خلاصهٔ پیشرفت</h2>
       <div class="mv-card">
         <p class="mv-big">${esc(toFa(vm.overall.answered))} از ${esc(toFa(vm.overall.total))}</p>
@@ -98,6 +117,7 @@ export function renderProfile(vm) {
           <dd class="mv-big">${esc(toFa(s.completedSections ?? 0))}</dd></div>
       </dl>
     </section>
+    ${streakBlock(vm.streak)}
     <section class="mv-section"><h2>آمار یادگیری</h2>
       <dl class="mv-stats">
         <div class="mv-card"><dt class="mv-meta">پاسخ‌های پاسخ‌داده‌شده</dt>
