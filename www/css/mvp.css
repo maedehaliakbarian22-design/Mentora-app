@@ -1,31 +1,134 @@
 /* Mentora MVP shell styles. Persian, RTL, high-school friendly.
-   Class names are prefixed mv- so they do not collide with app.css. */
+   Class names are prefixed mv- so they do not collide with app.css.
+
+   Colours are tokens. Light values live on :root; dark values override them
+   when the page has data-theme="dark", or when the device prefers dark and
+   the learner has not picked light explicitly. */
+
+/* Heavier Vazirmatn weights. The files come from the same release zip as
+   Regular and Bold; the build step copies them into www/fonts. If a file is
+   missing, the browser falls back to Bold without breaking the page. */
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('../fonts/Vazirmatn-ExtraBold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('../fonts/Vazirmatn-Black.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   --mv-ink: #1f2937;
   --mv-muted: #6b7280;
-  --mv-brand: #1fae5b;
-  --mv-brand-dark: #178f4a;
-  --mv-brand-ink: #ffffff;
-  --mv-brand-soft: #e7f8ee;
-  --mv-accent: #ffc800;
-  --mv-accent-dark: #e0a800;
+  --mv-brand: #ff6eb4;
+  --mv-brand-dark: #e0559c;
+  --mv-brand-text: #c2185b;
+  --mv-brand-ink: #2a0a1c;
+  --mv-brand-soft: #ffe5f3;
+  --mv-accent: #fcf75e;
+  --mv-accent-dark: #d9d23a;
   --mv-surface: #ffffff;
-  --mv-canvas: #ffffff;
-  --mv-line: #e5e7eb;
+  --mv-canvas: #fff6fa;
+  --mv-line: #ece3ea;
+  --mv-option-line: #f0d4e6;
   --mv-ok: #15803d;
   --mv-bad: #b91c1c;
-  /* PROVISIONAL feedback colours (awaiting Kimia's approval, B-02). Each ink
-     passes 4.5:1 against its background (measured 8.30 and 8.20). */
+  /* Feedback colours (provisional, awaiting Kimia's approval, B-02). Each ink
+     passes 4.5:1 against its background. */
   --mv-feedback-correct-bg: #dcfce7;
   --mv-feedback-correct-ink: #14532d;
   --mv-feedback-incorrect-bg: #fee2e2;
   --mv-feedback-incorrect-ink: #7f1d1d;
+  --mv-choice-ok-bg: #ecfdf3;
+  --mv-choice-bad-bg: #fef2f2;
+  --mv-badge-bg: #fef9c3;
+  --mv-badge-ink: #713f12;
+  --mv-banner-bg: #fff7ed;
+  --mv-banner-line: #fed7aa;
+  --mv-banner-ink: #9a3412;
+  --mv-disabled-bg: #e5e7eb;
+  --mv-disabled-edge: #cbd0d8;
+  --mv-disabled-ink: #6b7280;
   --mv-radius: 18px;
   --mv-edge: 4px;
   --mv-tap: 48px;
+  color-scheme: light;
   font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
   font-size: 17px;
+}
+
+/* Dark palette: system preference, unless the learner chose light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --mv-ink: #f5f2f7;
+    --mv-muted: #a7a2ad;
+    --mv-brand: #ff6eb4;
+    --mv-brand-dark: #c94b8e;
+    --mv-brand-text: #ff9ccb;
+    --mv-brand-ink: #2a0a1c;
+    --mv-brand-soft: #3b1f2f;
+    --mv-accent: #fcf75e;
+    --mv-accent-dark: #c9c33a;
+    --mv-surface: #1c1b21;
+    --mv-canvas: #0e0e10;
+    --mv-line: #34323b;
+    --mv-option-line: #4a2c3d;
+    --mv-ok: #4ade80;
+    --mv-bad: #f87171;
+    --mv-feedback-correct-bg: #123524;
+    --mv-feedback-correct-ink: #bbf7d0;
+    --mv-feedback-incorrect-bg: #3a1717;
+    --mv-feedback-incorrect-ink: #fecaca;
+    --mv-choice-ok-bg: #14291f;
+    --mv-choice-bad-bg: #2e1616;
+    --mv-badge-bg: #3d3a12;
+    --mv-badge-ink: #fde68a;
+    --mv-banner-bg: #2e2014;
+    --mv-banner-line: #6b3f1f;
+    --mv-banner-ink: #fdba74;
+    --mv-disabled-bg: #2a2930;
+    --mv-disabled-edge: #1a191f;
+    --mv-disabled-ink: #6b6872;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --mv-ink: #f5f2f7;
+  --mv-muted: #a7a2ad;
+  --mv-brand: #ff6eb4;
+  --mv-brand-dark: #c94b8e;
+  --mv-brand-text: #ff9ccb;
+  --mv-brand-ink: #2a0a1c;
+  --mv-brand-soft: #3b1f2f;
+  --mv-accent: #fcf75e;
+  --mv-accent-dark: #c9c33a;
+  --mv-surface: #1c1b21;
+  --mv-canvas: #0e0e10;
+  --mv-line: #34323b;
+  --mv-option-line: #4a2c3d;
+  --mv-ok: #4ade80;
+  --mv-bad: #f87171;
+  --mv-feedback-correct-bg: #123524;
+  --mv-feedback-correct-ink: #bbf7d0;
+  --mv-feedback-incorrect-bg: #3a1717;
+  --mv-feedback-incorrect-ink: #fecaca;
+  --mv-choice-ok-bg: #14291f;
+  --mv-choice-bad-bg: #2e1616;
+  --mv-badge-bg: #3d3a12;
+  --mv-badge-ink: #fde68a;
+  --mv-banner-bg: #2e2014;
+  --mv-banner-line: #6b3f1f;
+  --mv-banner-ink: #fdba74;
+  --mv-disabled-bg: #2a2930;
+  --mv-disabled-edge: #1a191f;
+  --mv-disabled-ink: #6b6872;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -40,7 +143,7 @@ body {
 
 .app { max-width: 640px; margin: 0 auto; padding: 16px 16px 32px; }
 
-.mv-title { font-size: 1.6rem; line-height: 1.5; margin: 8px 0 12px; outline: none; }
+.mv-title { font-size: 1.6rem; font-weight: 900; line-height: 1.5; margin: 8px 0 12px; outline: none; }
 .mv-kicker { color: var(--mv-muted); margin: 0 0 8px; }
 .mv-note { color: var(--mv-muted); font-size: 0.95rem; }
 .mv-meta { color: var(--mv-muted); font-size: 0.9rem; margin: 6px 0; display: block; }
@@ -56,8 +159,23 @@ body {
 .mv-hero .mv-title, .mv-hero .mv-kicker { color: var(--mv-brand-ink); }
 .mv-hero .mv-link { color: var(--mv-brand-ink); }
 
+/* Counter chip: answered questions shown as a pill. */
+.mv-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--mv-accent);
+  color: #2a2a00;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  box-shadow: 0 3px 0 var(--mv-accent-dark);
+  margin: 6px 0;
+}
+
 .mv-section { margin: 20px 0; }
-.mv-section h2 { font-size: 1.1rem; margin: 0 0 10px; }
+.mv-section h2 { font-size: 1.15rem; font-weight: 900; margin: 0 0 10px; }
 
 .mv-card {
   display: block;
@@ -74,20 +192,20 @@ body {
 }
 .mv-card--tap { cursor: pointer; min-height: var(--mv-tap); }
 .mv-card--tap:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--mv-line); }
-.mv-card__title { display: block; font-weight: 700; font-size: 1.05rem; margin-bottom: 4px; }
+.mv-card__title { display: block; font-weight: 800; font-size: 1.05rem; margin-bottom: 4px; }
 
 .mv-lesson p { line-height: 2; margin: 0 0 12px; }
 
 .mv-badge {
   display: inline-block;
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--mv-badge-bg);
+  color: var(--mv-badge-ink);
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 0.8rem;
   margin-inline-start: 6px;
 }
-.mv-badge--soft { background: var(--mv-brand-soft); color: var(--mv-brand-dark); }
+.mv-badge--soft { background: var(--mv-brand-soft); color: var(--mv-brand-text); }
 
 .mv-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .mv-chip {
@@ -98,7 +216,7 @@ body {
   background: var(--mv-surface);
   color: var(--mv-ink);
   font: inherit;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   box-shadow: 0 3px 0 var(--mv-line);
 }
@@ -113,7 +231,7 @@ body {
   gap: 8px;
   padding: 12px 16px;
   border-radius: var(--mv-radius);
-  border: 1px solid #cfe3e0;
+  border: 1px solid var(--mv-option-line);
   background: var(--mv-surface);
   font: inherit;
   color: inherit;
@@ -125,9 +243,9 @@ body {
 .mv-link {
   background: none;
   border: 0;
-  color: var(--mv-brand);
+  color: var(--mv-brand-text);
   font: inherit;
-  font-weight: 700;
+  font-weight: 800;
   min-height: var(--mv-tap);
   padding: 0 4px;
   cursor: pointer;
@@ -141,7 +259,7 @@ body {
   margin: 12px 0;
   border-radius: 999px;
   font: inherit;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 1.1rem;
   letter-spacing: 0.01em;
   cursor: pointer;
@@ -154,10 +272,10 @@ body {
   box-shadow: 0 var(--mv-edge) 0 var(--mv-brand-dark);
 }
 .mv-primary:active:not(:disabled) { transform: translateY(var(--mv-edge)); box-shadow: 0 0 0 var(--mv-brand-dark); }
-.mv-primary:disabled { background: #d1d5db; box-shadow: 0 var(--mv-edge) 0 #b8bec8; color: #6b7280; cursor: not-allowed; }
+.mv-primary:disabled { background: var(--mv-disabled-bg); box-shadow: 0 var(--mv-edge) 0 var(--mv-disabled-edge); color: var(--mv-disabled-ink); cursor: not-allowed; }
 .mv-secondary {
   background: var(--mv-surface);
-  color: var(--mv-brand-dark);
+  color: var(--mv-brand-text);
   border: 2px solid var(--mv-line);
   box-shadow: 0 var(--mv-edge) 0 var(--mv-line);
 }
@@ -175,22 +293,19 @@ body {
   border-radius: var(--mv-radius);
   border: 2px solid var(--mv-line);
   background: var(--mv-surface);
+  color: var(--mv-ink);
   font: inherit;
   font-size: 1.05rem;
   text-align: right;
   cursor: pointer;
   box-shadow: 0 var(--mv-edge) 0 var(--mv-line);
 }
-.mv-choice:disabled { cursor: default; }
-.mv-choice:disabled {
-  color: var(--mv-ink);
-  opacity: 1;
-}
+.mv-choice:disabled { cursor: default; color: var(--mv-ink); opacity: 1; }
 .mv-choice.is-selected { border-color: var(--mv-brand); background: var(--mv-brand-soft); }
-.mv-choice.is-correct { border-color: var(--mv-ok); background: #ecfdf3; box-shadow: 0 var(--mv-edge) 0 var(--mv-ok); animation: mv-pop 0.28s ease-out; }
-.mv-choice.is-wrong { border-color: var(--mv-bad); background: #fef2f2; }
+.mv-choice.is-correct { border-color: var(--mv-ok); background: var(--mv-choice-ok-bg); box-shadow: 0 var(--mv-edge) 0 var(--mv-ok); animation: mv-pop 0.28s ease-out; }
+.mv-choice.is-wrong { border-color: var(--mv-bad); background: var(--mv-choice-bad-bg); }
 .mv-choice.is-correct, .mv-choice.is-wrong { display: flex; align-items: center; gap: 8px; }
-.mv-choice__icon { margin-inline-start: auto; font-size: 1.2rem; font-weight: 700; line-height: 1; }
+.mv-choice__icon { margin-inline-start: auto; font-size: 1.2rem; font-weight: 800; line-height: 1; }
 .mv-choice__icon.is-ok { color: var(--mv-ok); }
 .mv-choice__icon.is-bad { color: var(--mv-bad); }
 
@@ -199,24 +314,53 @@ body {
 .mv-feedback-panel.is-incorrect { background: var(--mv-feedback-incorrect-bg); color: var(--mv-feedback-incorrect-ink); }
 .mv-feedback-panel .mv-note { color: inherit; margin: 6px 0 0; }
 
-.mv-feedback { font-weight: 700; margin: 0; }
+.mv-feedback { font-weight: 800; margin: 0; }
 .mv-feedback.is-ok { color: var(--mv-ok); }
 .mv-feedback.is-bad { color: var(--mv-bad); }
 
 .mv-score { text-align: center; }
-.mv-big { font-size: 2rem; font-weight: 800; margin: 8px 0; }
+.mv-big { font-size: 2rem; font-weight: 900; margin: 8px 0; }
 
 .mv-banner {
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  color: #9a3412;
+  background: var(--mv-banner-bg);
+  border: 1px solid var(--mv-banner-line);
+  color: var(--mv-banner-ink);
   border-radius: var(--mv-radius);
   padding: 12px 16px;
   margin-bottom: 12px;
 }
 .mv-banner p { margin: 4px 0; }
 
-:focus-visible { outline: 3px solid var(--mv-accent); outline-offset: 2px; }
+/* Theme toggle row on Profile. */
+.mv-theme {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--mv-tap);
+  padding: 12px 16px;
+  background: var(--mv-surface);
+  color: var(--mv-ink);
+  border: 2px solid var(--mv-line);
+  border-radius: var(--mv-radius);
+  box-shadow: 0 var(--mv-edge) 0 var(--mv-line);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.mv-theme__icon svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+:focus-visible { outline: 3px solid var(--mv-accent-dark); outline-offset: 2px; }
 
 @keyframes mv-pop {
   0% { transform: scale(0.96); }
