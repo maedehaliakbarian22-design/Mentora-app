@@ -329,6 +329,8 @@ function boot() {
 
   function render() {
     const route = nav.current();
+    // Leaving practice ends the timed view: returning later starts a fresh timer.
+    if (route.name !== ROUTES.PRACTICE) practiceUi = null;
     // Without a selection the learner is on the first-run screen, which has no bar.
     const effective = progress.selection ? route.name : ROUTES.SELECTION;
     const showTabs = shouldShowTabBar(effective);
