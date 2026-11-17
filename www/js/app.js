@@ -158,7 +158,7 @@ function boot() {
 
   function uiFor(route) {
     const key = practiceKey(route);
-    // shownAt is kept for the flow state only; response timing is not stored.
+    // shownAt: when this question was first shown. Used for response time.
     if (!practiceUi || practiceUi.key !== key) practiceUi = { ...newPracticeUi(key), shownAt: Date.now() };
     return practiceUi;
   }
@@ -407,7 +407,7 @@ function boot() {
           return render();
         }
         // Record first. If the log write fails, nothing is shown as answered.
-        const res = service.check(section.id, question.id, outcome.selectedIndex);
+        const res = service.check(section.id, question.id, outcome.selectedIndex, ui.shownAt);
         if (!res.ok) {
           if (res.reason === 'log-write') pendingNotices.push(LOG_WRITE_TEXT);
           practiceUi = ui;

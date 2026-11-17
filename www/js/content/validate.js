@@ -67,8 +67,13 @@ export function validateCatalog(catalog) {
       if (sec.placeholder === false && (sec.body || []).some((p) => typeof p !== 'string' || !p)) {
         errors.push(`section "${sec.id}": body paragraphs must be non-empty strings`);
       }
+      const topicIds = new Set();
+      for (const t of sec.topics || []) {
+        if (claim('topic', t.id)) topicIds.add(t.id);
+        if (typeof t.title !== 'string' || !t.title) errors.push(`topic "${t.id}": title is required`);
+      }
       for (const q of sec.questions || []) {
-        validateQuestion(q, sec.id, claim, errors);
+        validateQuestion(q, sec.id, claim, errors, topicIds);
       }
     }
   }
@@ -76,9 +81,12 @@ export function validateCatalog(catalog) {
   return errors;
 }
 
-function validateQuestion(q, sectionId, claim, errors) {
+function validateQuestion(q, sectionId, claim, errors, topicIds) {
   claim('question', q.id);
   const where = `question "${q.id}" in section "${sectionId}"`;
+  if (q.topicId !== undefined && !topicIds.has(q.topicId)) {
+    errors.push(`${where}: topicId "${q.topicId}" is not a topic of this section`);
+  }
   if (q.status !== 'demo' && q.status !== 'verified') {
     errors.push(`${where}: status must be 'demo' or 'verified'`);
   }

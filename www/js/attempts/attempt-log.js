@@ -31,6 +31,10 @@ export const ATTEMPT_LOG_FIELDS = Object.freeze([
   'mode',
   'contentVersion',
 ]);
+// Added after schema v1 records already existed. Optional: a record without them
+// is valid and means "not recorded". Adding them does not change schemaVersion
+// and does not touch the legacy migration.
+export const ATTEMPT_LOG_OPTIONAL_FIELDS = Object.freeze(['elapsedTimeMs', 'topicId']);
 
 const fail = (reason) => ({ ok: false, reason });
 const nonEmpty = (v) => typeof v === 'string' && v.trim().length > 0;
@@ -41,7 +45,9 @@ const nonEmpty = (v) => typeof v === 'string' && v.trim().length > 0;
 export function validateAttemptRecord(input, index) {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) return fail('not-object');
   for (const key of Object.keys(input)) {
-    if (!ATTEMPT_LOG_FIELDS.includes(key)) return fail(`unknown-field:${key}`);
+    if (!ATTEMPT_LOG_FIELDS.includes(key) && !ATTEMPT_LOG_OPTIONAL_FIELDS.includes(key)) {
+      return fail(`unknown-field:${key}`);
+    }
   }
   for (const key of ATTEMPT_LOG_FIELDS) {
     if (!(key in input)) return fail(`missing-field:${key}`);
@@ -57,6 +63,16 @@ export function validateAttemptRecord(input, index) {
   for (const key of ['timestampLocal', 'mode', 'contentVersion']) {
     if (input[key] !== null && typeof input[key] !== 'string') return fail(`type:${key}`);
   }
+  // Response time: milliseconds from the question being shown to the answer being
+  // checked. Internal only (never shown to the learner). null = not recorded.
+  const elapsed = input.elapsedTimeMs ?? null;
+  if (elapsed !== null && (!Number.isInteger(elapsed) || elapsed < 0)) return fail('elapsed');
+  // Topic: checked against the catalog, like correctness. A question without a
+  // topic must not carry one.
+  const topic = input.topicId ?? null;
+  if (topic !== null && !nonEmpty(topic)) return fail('topic-type');
+  // null means not recorded (legacy records), so only a recorded topic is checked.
+  if (topic !== null && topic !== (q.topicId ?? null)) return fail('topic');
   return { ok: true, record: Object.freeze({ ...input }) };
 }
 

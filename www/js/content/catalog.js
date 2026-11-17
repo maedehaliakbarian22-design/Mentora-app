@@ -52,9 +52,15 @@ export const CATALOG = Object.freeze({
           body: Object.freeze([
             'این متن جای‌نگهدار است. متن تأییدشدهٔ کتاب هنوز وارد نشده است.',
           ]),
+          // Topics (مبحث) are metadata under a section. Section stays the Pattern
+          // and Learning State unit (DQ-1). Placeholder topic only.
+          topics: Object.freeze([
+            Object.freeze({ id: 'chapter-1-section-1-topic-1', title: 'مبحث نمونه ۱' }),
+          ]),
           questions: Object.freeze([
             Object.freeze({
               id: 'demo-q1',
+              topicId: 'chapter-1-section-1-topic-1',
               status: 'demo',
               prompt: 'نمونه: حاصل ۲ + ۳ چند است؟',
               options: Object.freeze(['4', '5', '6']),
@@ -63,6 +69,7 @@ export const CATALOG = Object.freeze({
             }),
             Object.freeze({
               id: 'demo-q2',
+              topicId: 'chapter-1-section-1-topic-1',
               status: 'demo',
               prompt: 'نمونه: حاصل ۱۰ − ۴ چند است؟',
               options: Object.freeze(['6', '5', '4']),
@@ -71,6 +78,7 @@ export const CATALOG = Object.freeze({
             }),
             Object.freeze({
               id: 'demo-q3',
+              topicId: 'chapter-1-section-1-topic-1',
               status: 'demo',
               prompt: 'نمونه: حاصل ۳ × ۴ چند است؟',
               options: Object.freeze(['7', '12', '14']),
@@ -86,6 +94,7 @@ export const CATALOG = Object.freeze({
           body: Object.freeze([
             'این بخش جای‌نگهدار است. محتوای تأییدشده هنوز در دسترس نیست.',
           ]),
+          topics: Object.freeze([]),
           questions: Object.freeze([]),
         }),
       ]),
@@ -100,6 +109,7 @@ export function indexCatalog(catalog) {
   const subjects = new Map();
   const chapters = new Map();
   const sections = new Map();
+  const topics = new Map();
   const questions = new Map();
   for (const g of catalog.grades || []) {
     grades.set(g.id, g);
@@ -110,8 +120,9 @@ export function indexCatalog(catalog) {
     chapters.set(c.id, c);
     for (const sec of c.sections || []) {
       sections.set(sec.id, { ...sec, chapterId: c.id });
+      for (const t of sec.topics || []) topics.set(t.id, { ...t, sectionId: sec.id });
       for (const q of sec.questions || []) questions.set(q.id, { ...q, sectionId: sec.id });
     }
   }
-  return { grades, fields, subjects, chapters, sections, questions };
+  return { grades, fields, subjects, chapters, sections, topics, questions };
 }

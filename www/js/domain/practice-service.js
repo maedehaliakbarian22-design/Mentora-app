@@ -110,7 +110,9 @@ export function createPracticeService({
   }
 
   // Records one answer. Returns { ok, saved, reason }.
-  function check(sectionId, questionId, selectedIndex) {
+  // shownAtMs: epoch ms when the question was first shown. Optional; without it
+  // elapsedTimeMs is recorded as null.
+  function check(sectionId, questionId, selectedIndex, shownAtMs = null) {
     const section = sectionOf(sectionId);
     const q = index.questions.get(questionId);
     if (!section || !q || q.sectionId !== sectionId) return { ok: false, reason: 'unknown' };
@@ -122,6 +124,7 @@ export function createPracticeService({
 
     const runId = state.runId ?? newId();
     const sequenceInSession = records.filter((r) => r.sessionId === runId && r.sectionId === sectionId).length + 1;
+    const answeredAt = now();
     const candidate = {
       schemaVersion: 1,
       attemptId: newId(),
@@ -131,9 +134,13 @@ export function createPracticeService({
       questionId,
       selectedOptionId: q.optionIds[selectedIndex],
       isCorrect: selectedIndex === q.correctIndex,
-      timestampLocal: toLocalIso(now()),
+      timestampLocal: toLocalIso(answeredAt),
       mode: 'practice',
       contentVersion: String(catalogVersion),
+      elapsedTimeMs: Number.isFinite(shownAtMs)
+        ? Math.max(0, Math.round(answeredAt.getTime() - shownAtMs))
+        : null,
+      topicId: q.topicId ?? null,
     };
     const v = validateAttemptRecord(candidate, index);
     if (!v.ok) return { ok: false, reason: 'invalid' };
