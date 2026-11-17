@@ -1,3 +1,4 @@
+import { readQuestionMeta } from '../content/question-meta.js';
 // Chooses the next question for a topic from the learner's state.
 // Pure: the caller passes the catalog questions (in catalog order) and what the
 // learner has already answered in this run.
@@ -36,10 +37,10 @@ export function chooseNextStep({ mastery, diagnosisStatus = null, questions, ans
 
   if (state === 'insufficient') return pick(null, NEXT_REASON.NOT_ENOUGH_EVIDENCE);
   if (diagnosisStatus === 'conceptual_weakness' || state === 'weak') {
-    return pick((q) => q.kind === 'concept', NEXT_REASON.CONCEPT_FOCUS);
+    return pick((q) => readQuestionMeta(q).kind === 'concept', NEXT_REASON.CONCEPT_FOCUS);
   }
   if (diagnosisStatus === 'rushed_wrong_answers') return pick(null, NEXT_REASON.ACCURACY_FOCUS);
   if (diagnosisStatus === 'carelessness_suspected') return pick(null, NEXT_REASON.ATTENTION_FOCUS);
-  if (state === 'solid') return pick((q) => q.difficulty === 'hard', NEXT_REASON.CHALLENGE);
+  if (state === 'solid') return pick((q) => readQuestionMeta(q).difficulty === 'hard', NEXT_REASON.CHALLENGE);
   return pick(null, NEXT_REASON.CONTINUE);
 }
